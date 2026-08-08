@@ -1,0 +1,14 @@
+.env
+credentials.json
+token.json
+.tmp/
+.venv/
+downloads/
+__pycache__/
+*.pyc
+app/build/
+app/dist/
+app/bin/
+# Instalador pronto (~142 MB). O GitHub recusa arquivo acima de 100 MB, e ele é
+# regenerado a qualquer momento com pyinstaller + ISCC.
+instalador/Saida/
