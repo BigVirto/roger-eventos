@@ -9,12 +9,14 @@ para o diretório temporário do PyInstaller e faria os downloads sumirem.
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 _CARACTERES_INVALIDOS = re.compile(r'[<>:"/\\|?*]')
 NOME_PASTA_PADRAO = "Músicas Baixadas"
+NOME_PASTA_VIDEOS_PADRAO = "Vídeos Baixados"
 ARQUIVO_CONFIG = "configuracao.json"
 
 
@@ -42,21 +44,21 @@ def _caminho_config() -> Path:
     return pasta_dados() / ARQUIVO_CONFIG
 
 
-def _pasta_musicas_do_windows() -> Path | None:
-    """Pasta 'Músicas' do usuário, lida do registro.
+def _pasta_do_windows(chave_registro: str, nome_reserva: str) -> Path | None:
+    """Pasta pessoal do usuário (Músicas, Vídeos...), lida do registro.
 
-    Não dá para assumir `~/Music`: o usuário pode tê-la movido (comum com OneDrive),
-    e o nome em disco varia. O registro é a fonte confiável.
+    Não dá para assumir `~/Music` ou `~/Videos`: o usuário pode tê-las movido (comum com
+    OneDrive), e o nome em disco varia com o idioma. O registro é a fonte confiável.
     """
     try:
         import winreg
 
         chave = r"Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders"
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, chave) as k:
-            caminho = Path(winreg.QueryValueEx(k, "My Music")[0])
+            caminho = Path(winreg.QueryValueEx(k, chave_registro)[0])
         return caminho if caminho.exists() else None
     except Exception:  # noqa: BLE001 - qualquer falha cai no plano B
-        candidato = Path.home() / "Music"
+        candidato = Path.home() / nome_reserva
         return candidato if candidato.exists() else None
 
 
@@ -67,10 +69,23 @@ def pasta_downloads_padrao() -> Path:
     mas com instalador o executável vai para uma pasta de programas, e música não é
     lugar de ficar lá.
     """
-    musicas = _pasta_musicas_do_windows()
+    musicas = _pasta_do_windows("My Music", "Music")
     if musicas:
         return musicas / "Roger Eventos"
     return _pasta_base() / NOME_PASTA_PADRAO
+
+
+def pasta_videos_padrao() -> Path:
+    """Destino padrão dos vídeos: 'Vídeos\\Roger Eventos'.
+
+    Separado das músicas de propósito. Serato, Rekordbox e VirtualDJ varrem a pasta de
+    música para montar a biblioteca — um MP4 de 200 MB no meio dos MP3 aparece como faixa
+    e bagunça o acervo de trabalho dele.
+    """
+    videos = _pasta_do_windows("My Video", "Videos")
+    if videos:
+        return videos / "Roger Eventos"
+    return _pasta_base() / NOME_PASTA_VIDEOS_PADRAO
 
 
 def obter_config(chave: str, padrao=None):
@@ -110,6 +125,36 @@ def obter_pasta_downloads() -> Path:
 def definir_pasta_downloads(caminho: Path) -> None:
     """Salva a escolha do usuário para as próximas sessões."""
     definir_config("pasta_downloads", str(caminho))
+
+
+def obter_pasta_videos() -> Path:
+    """Pasta de vídeos escolhida pelo usuário, ou a padrão se não houver escolha utilizável."""
+    escolhida = obter_config("pasta_videos")
+    if escolhida:
+        caminho = Path(escolhida)
+        if caminho.parent.exists():
+            return caminho
+    return pasta_videos_padrao()
+
+
+def definir_pasta_videos(caminho: Path) -> None:
+    """Salva a escolha do usuário para as próximas sessões."""
+    definir_config("pasta_videos", str(caminho))
+
+
+def espaco_livre(pasta: Path) -> int:
+    """Bytes livres no disco da pasta. 0 quando não dá para saber.
+
+    Uma playlist de vídeo passa fácil dos 5 GB; encher o disco no meio deixaria arquivos
+    truncados e o Windows reclamando. Melhor avisar antes de começar.
+    """
+    try:
+        alvo = pasta
+        while not alvo.exists() and alvo != alvo.parent:
+            alvo = alvo.parent  # a pasta de destino pode ainda não ter sido criada
+        return shutil.disk_usage(alvo).free
+    except OSError:
+        return 0
 
 
 def abrir_pasta(caminho: Path) -> None:

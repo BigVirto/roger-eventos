@@ -67,6 +67,7 @@ MODULOS_ESSENCIAIS = (
     "core.versao",
     "core.organizer",
     "core.registro",
+    "core.ocorrencias",
     "core.link_detector",
     "core.matcher",
     "core.metadata",

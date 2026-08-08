@@ -4,6 +4,9 @@ token.json
 .tmp/
 .venv/
 downloads/
+ocorrencias/
+registro.txt
+configuracao.json
 __pycache__/
 *.pyc
 app/build/
