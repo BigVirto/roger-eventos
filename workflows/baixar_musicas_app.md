@@ -141,6 +141,15 @@ pyinstaller build.spec
 
 Saída: `app\dist\RogerEventos-BaixadorDeMusicas.exe`.
 
+> **Fechar o app antes de regerar.** Com o `.exe` aberto, o PyInstaller falha com
+> `PermissionError: [WinError 5] Acesso negado` e **mantém o executável antigo no lugar**.
+> Em 2026-08-07 isso me custou uma rodada inteira de testes contra um binário velho, com
+> resultados que pareciam um bug no código.
+>
+> Pior: `pyinstaller ... | tail -3` devolve o código de saída do `tail`, não do
+> PyInstaller — a build falhada aparecia como sucesso. **Conferir o código de saída sem
+> cano no meio, e conferir a data do `.exe` gerado.**
+
 **Esse `.exe` é o único arquivo a distribuir.** Ele leva Python, bibliotecas e o ffmpeg embutidos. Na máquina do Rogério é só copiar e dar duplo-clique — sem instalar Python, sem instalar ffmpeg, sem configurar credencial, sem arquivo do lado.
 
 ## O YouTube bloqueia downloads automatizados (importante)
