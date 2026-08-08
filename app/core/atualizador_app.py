@@ -46,6 +46,10 @@ NOME_ASSET = "roger-eventos-app.zip"
 INTERVALO_VERIFICACAO_S = 6 * 3600
 PASTAS_DO_APP = ("core", "gui")
 ARQUIVO_VERSAO = "versao.txt"
+# Versão que já se mostrou ruim nesta máquina. Sem isto, descartar uma atualização só
+# durava até a próxima verificação (6h) — o app rebaixava exatamente a mesma versão e o
+# problema voltava. Guarda só a recusada: uma versão mais nova continua sendo aceita.
+ARQUIVO_RECUSADA = "recusada.txt"
 
 # Módulos exigidos para considerar a atualização utilizável. Importar todos eles pega
 # erro de sintaxe e import quebrado — as falhas mais prováveis de um pacote ruim.
@@ -98,12 +102,33 @@ def versao_baixada(pasta: Path | None = None) -> str | None:
     return versao if (versao and completo) else None
 
 
-def descartar() -> None:
-    """Remove a atualização e volta a valer o código embutido no .exe."""
+def versao_recusada() -> str | None:
+    """Versão marcada como ruim nesta máquina, se houver."""
+    try:
+        return (pasta_atualizacao() / ARQUIVO_RECUSADA).read_text(encoding="utf-8").strip() or None
+    except OSError:
+        return None
+
+
+def descartar(recusar: bool = False) -> str | None:
+    """Remove a atualização e volta a valer o código embutido no .exe.
+
+    Com `recusar=True`, anota a versão descartada para não baixá-la de novo. Usar
+    sempre que o descarte veio de um problema (pacote quebrado, app não abriu, ou o
+    Vitor rodou --reverter); sem isso o app rebaixaria a mesma versão em até 6 horas.
+
+    Retorna a versão que foi descartada, ou None se não havia nada.
+    """
     destino = pasta_atualizacao()
+    descartada = versao_baixada()
     for pasta in PASTAS_DO_APP:
         shutil.rmtree(destino / pasta, ignore_errors=True)
     (destino / ARQUIVO_VERSAO).unlink(missing_ok=True)
+
+    if recusar and descartada:
+        destino.mkdir(parents=True, exist_ok=True)
+        (destino / ARQUIVO_RECUSADA).write_text(descartada, encoding="utf-8")
+    return descartada
 
 
 def _deve_verificar() -> bool:
@@ -173,7 +198,7 @@ def verificar_e_atualizar() -> str | None:
         from core.versao import como_tupla
 
         publicada = release.get("tag_name", "").lstrip("vV")
-        if not publicada:
+        if not publicada or publicada == versao_recusada():
             return None
 
         # Tem de ser maior que a embutida E que a já baixada, senão o app ficaria
@@ -206,6 +231,12 @@ def preparar_sys_path() -> str | None:
     if not baixada:
         return None
 
+    if baixada == versao_recusada():
+        # Já se mostrou ruim aqui. Só chega neste ponto se o pacote foi baixado antes da
+        # recusa; apagar agora evita que ele volte a valer na abertura seguinte.
+        descartar()
+        return None
+
     from core.versao import como_tupla
 
     if como_tupla(baixada) <= como_tupla(versao_embutida()):
@@ -227,7 +258,7 @@ def preparar_sys_path() -> str | None:
         # falhar ao importar.
         sys.path.remove(pasta)
         _esquecer_modulos_do_app()
-        descartar()
+        descartar(recusar=True)
         return None
 
     return baixada

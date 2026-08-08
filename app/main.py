@@ -27,8 +27,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from core import atualizador_app  # noqa: E402
 
 if "--reverter" in sys.argv:
-    atualizador_app.descartar()
-    print("Atualizacao removida. O app voltou a versao embutida no executavel.")
+    # recusar=True e essencial: sem isso o app rebaixaria a mesma versao em ate 6 horas
+    # e o problema voltaria sozinho. Uma versao mais nova continua sendo aceita.
+    revertida = atualizador_app.descartar(recusar=True)
+    if revertida:
+        print(f"Atualizacao {revertida} removida e marcada como ruim; nao sera baixada de novo.")
+        print("O app voltou a versao embutida no executavel.")
+    else:
+        print("Nao havia atualizacao instalada. O app ja estava na versao do executavel.")
     sys.exit(0)
 
 VERSAO_ATUALIZADA = atualizador_app.preparar_sys_path()
@@ -130,7 +136,7 @@ def _abrir_janela() -> None:
         iniciar()
     except Exception:
         if VERSAO_ATUALIZADA:
-            atualizador_app.descartar()
+            atualizador_app.descartar(recusar=True)
             print(
                 f"A atualizacao {VERSAO_ATUALIZADA} falhou ao iniciar e foi removida. "
                 "Abra o app novamente."
