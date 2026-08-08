@@ -3,13 +3,14 @@
  *
  * POR QUE ISTO EXISTE
  * Abrir uma Issue no GitHub exige uma chave. Colocar essa chave dentro do .exe que está
- * na casa do Rogério seria dar cópia da chave da loja para o cliente: o executável é
+ * na casa do usuário seria dar cópia da chave da loja para o cliente: o executável é
  * extraível e o repositório do app é público. Pior que o vazamento seria o vencimento —
  * quando a chave expirasse, o envio morreria em silêncio, e quem avisaria disso é
  * justamente o sistema de erros.
  *
  * Então o app não fala com o GitHub. Ele deposita a carta aqui, num endereço que só
- * recebe. A chave mora deste lado, na conta Google do Vitor, e nunca sai daqui.
+ * recebe. A chave mora deste lado, na conta Google de quem mantém o app, e nunca sai
+ * daqui.
  *
  * COMO INSTALAR (uma vez só)
  *   1. script.google.com  >  Novo projeto  >  colar este arquivo inteiro

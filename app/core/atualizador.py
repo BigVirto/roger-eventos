@@ -1,7 +1,7 @@
-"""Mantém o yt-dlp atualizado sem exigir nada do Rogério.
+"""Mantém o yt-dlp atualizado sem exigir nada do usuário.
 
 Por que existe: o yt-dlp vai congelado dentro do .exe. Quando o YouTube muda alguma
-coisa (acontece com frequência), a versão congelada para de funcionar e o Rogério não
+coisa (acontece com frequência), a versão congelada para de funcionar e o usuário não
 tem como consertar sozinho — dependeria de alguém regerar o executável.
 
 Como funciona: no máximo uma vez por semana, verifica no GitHub se saiu versão nova.

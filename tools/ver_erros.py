@@ -1,4 +1,4 @@
-"""Mostra os erros que chegaram da máquina do Rogério, agrupados e em ordem de dor.
+"""Mostra os erros que chegaram da máquina do usuário, agrupados e em ordem de dor.
 
 Por que existe: abrir o navegador e ler chamado por chamado não escala e não responde a
 pergunta que importa — "o que está atrapalhando MAIS?". Aqui a ordem é por quantidade de

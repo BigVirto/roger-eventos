@@ -1,4 +1,4 @@
-"""Ponto de entrada do app de download de músicas e vídeos do Roger Eventos.
+"""Ponto de entrada do app de download de músicas e vídeos RE Play.
 
 Não precisa de credenciais nem de arquivo de configuração: o Spotify é lido pela
 página pública e o YouTube pelo yt-dlp, ambos sem autenticação.
@@ -68,7 +68,7 @@ def _abrir_janela() -> None:
 
     Terceira camada de proteção do atualizador: o pacote passou na checagem de import
     mas estourou erro ao iniciar. Descartar aqui garante que a próxima abertura volte
-    ao código embutido, em vez de deixar o Rogério com um app que não abre.
+    ao código embutido, em vez de deixar o usuário com um app que não abre.
     """
     try:
         from gui.main_window import iniciar

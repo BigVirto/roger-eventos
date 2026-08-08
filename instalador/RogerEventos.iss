@@ -1,19 +1,19 @@
-; Instalador do Baixador de Músicas do Roger Eventos (Inno Setup 6, gratuito).
+; Instalador do Baixador de Músicas RE Play (Inno Setup 6, gratuito).
 ;
 ; Gerar: iscc instalador\RogerEventos.iss   (após compilar o .exe com PyInstaller)
-; Saída: instalador\Saida\Instalar-RogerEventos-BaixadorDeMusicas.exe
+; Saída: instalador\Saida\Instalar-REPlay-BaixadorDeMusicas.exe
 ;
 ; PrivilegesRequired=lowest é essencial: instala em %LOCALAPPDATA%\Programs, que o
 ; usuário pode escrever. Instalar em "Arquivos de Programas" exigiria administrador e
 ; o Windows bloquearia a escrita do app. Também evita o aviso de UAC.
 
-#define MeuApp "Baixador de Músicas - Roger Eventos"
-#define MeuAppPublisher "Roger Eventos"
-#define MeuExe "RogerEventos-BaixadorDeMusicas.exe"
+#define MeuApp "Baixador de Músicas - RE Play"
+#define MeuAppPublisher "RE Play"
+#define MeuExe "REPlay-BaixadorDeMusicas.exe"
 
 ; A versão é lida de app\core\versao.py, a mesma fonte que o app e o atualizador usam.
 ; Duplicar o número aqui já causou instalador dizendo 1.0.0 com o app em outra versão —
-; e sem versão confiável não dá para saber o que o Rogério tem instalado.
+; e sem versão confiável não dá para saber o que o usuário tem instalado.
 #define ArquivoVersao "..\app\core\versao.py"
 #define Handle
 #define Linha
@@ -40,13 +40,13 @@ AppId={{8E3A1C74-5B2F-4D89-9A6E-2C7F1B4D8E30}
 AppName={#MeuApp}
 AppVersion={#MeuAppVersao}
 AppPublisher={#MeuAppPublisher}
-DefaultDirName={autopf}\RogerEventos
-DefaultGroupName=Roger Eventos
+DefaultDirName={autopf}\REPlay
+DefaultGroupName=RE Play
 DisableProgramGroupPage=yes
 DisableDirPage=yes
 PrivilegesRequired=lowest
 OutputDir=Saida
-OutputBaseFilename=Instalar-RogerEventos-BaixadorDeMusicas
+OutputBaseFilename=Instalar-REPlay-BaixadorDeMusicas
 ; Faz a versão aparecer nas propriedades do arquivo — dá para conferir sem instalar.
 VersionInfoVersion={#MeuAppVersao}
 Compression=lzma2/max
@@ -77,6 +77,6 @@ Filename: "{app}\{#MeuExe}"; Description: "Abrir o app agora"; Flags: nowait pos
 
 [UninstallDelete]
 ; Remove só o que o app gerou em AppData (config, log, atualizações do yt-dlp).
-; As MÚSICAS ficam em "Músicas\Roger Eventos" e NÃO são apagadas de propósito —
-; são o trabalho do Rogério, não arquivo de programa.
+; As MÚSICAS ficam em "Músicas\RE Play" e NÃO são apagadas de propósito —
+; são o trabalho do usuário, não arquivo de programa.
 Type: filesandordirs; Name: "{localappdata}\RogerEventos"

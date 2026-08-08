@@ -2,7 +2,7 @@
 
 O yt-dlp precisa de um runtime JS para resolver os desafios do YouTube; sem ele
 o download cai em caminhos alternativos lentos ou falha. Como o app é entregue
-como .exe único, o Deno vai empacotado junto — o Rogério não instala nada.
+como .exe único, o Deno vai empacotado junto — o usuário não instala nada.
 
 Uso: python tools/baixar_deno.py
 """

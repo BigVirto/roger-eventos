@@ -1,13 +1,14 @@
-"""Arquivo de log ao lado do .exe, para diagnosticar problemas na máquina do Rogério.
+"""Arquivo de log ao lado do .exe, para diagnosticar problemas na máquina do usuário.
 
 Sem isto, quando algo falha na casa dele a única fonte é o relato verbal. Com o arquivo,
 dá para ver exatamente qual faixa falhou e por quê.
 
-Desde 2026-08-08 ele não depende mais de o Rogério mandar o arquivo: tudo que passa por
-`erro()` também vira um relatório enviado sozinho ao Vitor — ver `core/ocorrencias.py`.
+Desde 2026-08-08 ele não depende mais de o usuário mandar o arquivo: tudo que passa por
+`erro()` também vira um relatório enviado sozinho para quem mantém o app — ver
+`core/ocorrencias.py`.
 
-Escreve em português e sem jargão onde der: quem lê primeiro é o Vitor, mas o Rogério
-pode abrir o arquivo e entender o que aconteceu.
+Escreve em português e sem jargão onde der: quem lê primeiro é quem mantém o app, mas o
+usuário pode abrir o arquivo e entender o que aconteceu.
 """
 
 import logging
@@ -25,7 +26,7 @@ _logger: logging.Logger | None = None
 def caminho_log() -> Path:
     """Fica junto com os demais dados do app (AppData), não na pasta de instalação.
 
-    O botão "Erros" na janela abre este arquivo, então o Rogério nunca precisa saber
+    O botão "Erros" na janela abre este arquivo, então o usuário nunca precisa saber
     onde ele está.
     """
     from core.organizer import pasta_dados
@@ -61,7 +62,7 @@ def obter() -> logging.Logger:
 
 
 def _pendurar_relator(logger: logging.Logger) -> None:
-    """Faz todo `erro()` daqui virar também um relatório enviado ao Vitor.
+    """Faz todo `erro()` daqui virar também um relatório enviado a quem mantém o app.
 
     Pendurar no logger em vez de chamar o relator em cada ponto de falha: as chamadas a
     `erro()` já existem espalhadas por `pipeline.py`, `youtube.py` e pela janela, e as

@@ -81,7 +81,8 @@ class EspacoInsuficiente(Exception):
 
     Como o cancelamento, não é defeito do app: é uma condição da máquina que só ele pode
     resolver. Separada de `Exception` comum para não entrar no relatório automático de
-    erros — um disco cheio viraria chamado para o Vitor sobre algo que ele não conserta.
+    erros — um disco cheio viraria chamado para quem mantém o app sobre algo que ele não
+    conserta.
     """
 
 
@@ -103,6 +104,12 @@ class ResultadoFaixa:
 @dataclass
 class ResultadoProcessamento:
     faixas: list[ResultadoFaixa] = field(default_factory=list)
+
+    # Onde os arquivos foram parar DE VERDADE. Playlist e álbum criam uma subpasta com o
+    # nome da lista, então a pasta configurada não é a resposta. Sem isto, o botão
+    # "Abrir pasta" da janela abria a pasta de cima e ele não via as 40 faixas que acabara
+    # de baixar. Todo ramo de `processar_link` preenche.
+    pasta: Path | None = None
 
     @property
     def falhas(self) -> list[ResultadoFaixa]:
@@ -251,7 +258,7 @@ def _baixar_faixa_spotify(
         return ResultadoFaixa(nome_exibicao, str(destino), True, pulado=True)
 
     # Downloads feitos antes de 2026-08-07 usavam "Artista - Música". Reconhecê-los
-    # evita baixar de novo tudo que o Rogério já tem.
+    # evita baixar de novo tudo que o usuário já tem.
     antigo = pasta / f"{organizer.nome_arquivo_faixa_legado(artista, titulo)}{perfil.extensao}"
     if _ja_existe(antigo):
         return ResultadoFaixa(nome_exibicao, str(antigo), True, pulado=True)
@@ -377,6 +384,7 @@ def processar_link(
             avisar("Lendo a faixa no Spotify...")
             faixa = spotify.obter_faixa(spotify_id)
             progresso = novo_progresso(1)
+            resultado.pasta = perfil.pasta()
             avisar(f"Procurando no YouTube: {faixa['artista']} - {faixa['faixa']}")
             resultado.faixas.append(
                 _baixar_faixa_spotify(
@@ -393,6 +401,7 @@ def processar_link(
                 avisar("(se a playlist tiver mais que isso, confira o total no final)")
 
             pasta = organizer.pasta_para_playlist(nome, base=perfil.pasta())
+            resultado.pasta = pasta
             if perfil.nome == VIDEO:
                 _avisar_tamanho(
                     [{"duracao_s": (f.get("duracao_ms") or 0) / 1000} for f in faixas],
@@ -418,6 +427,7 @@ def processar_link(
             pasta = organizer.pasta_para_playlist(
                 f"Playlist YouTube ({len(itens)} faixas)", base=perfil.pasta()
             )
+            resultado.pasta = pasta
             if perfil.nome == VIDEO:
                 _avisar_tamanho(itens, pasta, avisar)
             progresso = novo_progresso(len(itens))
@@ -458,6 +468,7 @@ def processar_link(
         else:
             progresso = novo_progresso(1)
             pasta = perfil.pasta()
+            resultado.pasta = pasta
 
             # Para vídeo, descobrir o nome antes vale os ~2s de consulta: é o que evita
             # rebaixar 200 MB que já estão na pasta e o que permite limpar os pedaços se
@@ -499,6 +510,7 @@ def processar_link(
     else:  # TEXTO_LIVRE
         avisar(f"Procurando no YouTube: {texto}")
         progresso = novo_progresso(1)
+        resultado.pasta = perfil.pasta()
         candidatos = youtube.buscar_candidatos(texto, limite=1)
         if not candidatos:
             resultado.faixas.append(ResultadoFaixa(texto, None, False, erro="nenhum resultado"))

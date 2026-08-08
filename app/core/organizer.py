@@ -19,6 +19,15 @@ NOME_PASTA_PADRAO = "Músicas Baixadas"
 NOME_PASTA_VIDEOS_PADRAO = "Vídeos Baixados"
 ARQUIVO_CONFIG = "configuracao.json"
 
+# Nome da pasta dentro de Músicas/Vídeos.
+NOME_DA_PASTA = "RE Play"
+
+# Como o app já se chamou. Renomear o programa NÃO pode fazer a biblioteca do usuário
+# sumir de vista: sem isto, quem tinha músicas em `Músicas\Roger Eventos` passaria a
+# salvar em `Músicas\RE Play`, o app não reconheceria mais nada como "já baixado" e
+# rebaixaria a discoteca inteira na primeira playlist repetida.
+NOMES_ANTERIORES = ("Roger Eventos",)
+
 
 def _pasta_base() -> Path:
     """Onde o executável está instalado."""
@@ -62,8 +71,30 @@ def _pasta_do_windows(chave_registro: str, nome_reserva: str) -> Path | None:
         return candidato if candidato.exists() else None
 
 
+def _pasta_com_nome_atual_ou_anterior(base: Path) -> Path:
+    """`base/RE Play`, ou o nome antigo se for lá que a biblioteca do usuário está.
+
+    Não move nem renomeia nada: só continua usando a pasta que já tem os arquivos. Mover
+    seria pior — pasta grande, possivelmente sincronizada pelo OneDrive, e já apontada
+    dentro do Serato/Rekordbox, que perderiam o caminho das faixas.
+    """
+    atual = base / NOME_DA_PASTA
+    if atual.exists():
+        return atual
+
+    for anterior in NOMES_ANTERIORES:
+        candidata = base / anterior
+        try:
+            if candidata.is_dir() and any(candidata.iterdir()):
+                return candidata
+        except OSError:  # noqa: PERF203 - pasta ilegível vale como inexistente
+            continue
+
+    return atual
+
+
 def pasta_downloads_padrao() -> Path:
-    """Destino padrão: dentro de 'Músicas' do Windows, onde o Rogério espera achar.
+    """Destino padrão: dentro de 'Músicas' do Windows, onde o usuário espera achar.
 
     Antes ficava ao lado do .exe, o que funcionava quando o app era um arquivo solto —
     mas com instalador o executável vai para uma pasta de programas, e música não é
@@ -71,12 +102,12 @@ def pasta_downloads_padrao() -> Path:
     """
     musicas = _pasta_do_windows("My Music", "Music")
     if musicas:
-        return musicas / "Roger Eventos"
+        return _pasta_com_nome_atual_ou_anterior(musicas)
     return _pasta_base() / NOME_PASTA_PADRAO
 
 
 def pasta_videos_padrao() -> Path:
-    """Destino padrão dos vídeos: 'Vídeos\\Roger Eventos'.
+    """Destino padrão dos vídeos: 'Vídeos\\RE Play'.
 
     Separado das músicas de propósito. Serato, Rekordbox e VirtualDJ varrem a pasta de
     música para montar a biblioteca — um MP4 de 200 MB no meio dos MP3 aparece como faixa
@@ -84,7 +115,7 @@ def pasta_videos_padrao() -> Path:
     """
     videos = _pasta_do_windows("My Video", "Videos")
     if videos:
-        return videos / "Roger Eventos"
+        return _pasta_com_nome_atual_ou_anterior(videos)
     return _pasta_base() / NOME_PASTA_VIDEOS_PADRAO
 
 

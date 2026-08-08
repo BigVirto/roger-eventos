@@ -1,15 +1,15 @@
-# Workflow: Baixador de Músicas e Vídeos (Roger Eventos)
+# Workflow: Baixador de Músicas e Vídeos (RE Play)
 
 ## Objetivo
 
-App desktop para o Rogério baixar músicas e vídeos (individuais ou playlists) do YouTube e Spotify sem sites cheios de propaganda. Interface de um campo único e **dois botões**: cola o link (ou o nome da música) e escolhe **♪ Música** (MP3) ou **▶ Vídeo** (MP4).
+App desktop para o usuário baixar músicas e vídeos (individuais ou playlists) do YouTube e Spotify sem sites cheios de propaganda. Interface de um campo único e **dois botões**: cola o link (ou o nome da música) e escolhe **♪ Música** (MP3) ou **▶ Vídeo** (MP4).
 
 ## Onde está
 
 - Código: `app/` (`main.py`, `gui/`, `core/`)
 - Repositório: **github.com/BigVirto/roger-eventos** (público) — também é de onde o app baixa suas próprias atualizações
 - Downloads: `downloads/<nome da playlist/evento>/` (playlists e álbuns) ou direto em `downloads/` (faixa avulsa)
-- Na máquina do Rogério: programa em `%LOCALAPPDATA%\Programs\RogerEventos`, dados (config, log, atualizações) em `%LOCALAPPDATA%\RogerEventos`, músicas em `Músicas\Roger Eventos` e **vídeos em `Vídeos\Roger Eventos`**
+- Na máquina do usuário: programa em `%LOCALAPPDATA%\Programs\REPlay`, dados (config, log, atualizações) em `%LOCALAPPDATA%\RogerEventos` (nome antigo, mantido de propósito — ver `core/organizer.py`), músicas em `Músicas\RE Play` e **vídeos em `Vídeos\RE Play`**
 
 ## Como funciona (um campo, dois botões)
 
@@ -62,7 +62,7 @@ Isso é decidido em `core/organizer.py`. **Nunca usar `__file__` para essa pasta
 ## Atualizar o app sem mandar instalador (caminho normal)
 
 Desde 2026-08-07 o app se atualiza sozinho. **9 de cada 10 entregas seguem por aqui** —
-o Rogério não recebe arquivo, não clica em nada, só abre o app e já está atualizado.
+o usuário não recebe arquivo, não clica em nada, só abre o app e já está atualizado.
 
 Funciona porque `core/` e `gui/` são Python puro (~26 KB zipados). O `.exe` continua o
 mesmo; só os arquivos de texto são trocados. `core/atualizador_app.py` faz o trabalho,
@@ -112,10 +112,10 @@ Uma máquina só entra no caminho automático depois de ter a **1.2.0 ou mais no
 instalada — é o instalador que traz a capacidade de se atualizar, e o app não tem como
 aprendê-la sozinho. Quem ficar numa versão anterior nunca recebe nada e não avisa.
 
-Vale instalar também na máquina do Vitor: assim toda atualização passa por ele antes de
-chegar no Rogério, de graça.
+Vale instalar também numa máquina de quem mantém o app: assim toda atualização passa por
+ele antes de chegar no usuário, de graça.
 
-O app do Rogério verifica a cada 6 horas. **A troca vale na abertura seguinte** — quem
+O app do usuário verifica a cada 6 horas. **A troca vale na abertura seguinte** — quem
 estiver com o app aberto na hora só vê a mudança quando fechar e abrir de novo.
 
 **O que este caminho NÃO atualiza** (aí sim precisa de instalador novo): Python, ffmpeg,
@@ -133,7 +133,7 @@ deno, ícone, nome do programa, e o próprio `app/main.py`.
    embutido;
 3. se o app estourar erro ao abrir a janela, `main.py` descarta e pede para reabrir.
 
-**Saída manual:** `RogerEventos-BaixadorDeMusicas.exe --reverter` apaga a atualização e
+**Saída manual:** `REPlay-BaixadorDeMusicas.exe --reverter` apaga a atualização e
 volta ao embutido. É a única saída para o caso em que o código novo abre normalmente mas
 funciona mal — nenhuma checagem automática pega isso.
 
@@ -153,7 +153,7 @@ o número já está recusado naquela máquina, e o release seria ignorado.
 
 ### Atualiza sem pedir, mas não sem contar
 
-**Não perguntamos "deseja atualizar?".** O Rogério não teria como decidir: ele não sabe
+**Não perguntamos "deseja atualizar?".** O usuário não teria como decidir: ele não sabe
 o que mudou nem o que perde ao recusar. Uma pergunta dessas vira "sim" automático (não
 serviu para nada) ou "não" (ele fica com o app quebrado sem saber que escolheu isso). A
 maioria das atualizações conserta justamente o YouTube ter mudado — recusar é escolher
@@ -167,17 +167,17 @@ continuar quebrado.
   Sem botão e sem interromper — uma caixa com OK só treinaria o reflexo de fechar sem ler.
 
 O motivo mais forte é prático: sem isso, uma mudança de comportamento vira um chamado de
-suporte em que nem ele nem o Vitor sabem que o código trocou no meio.
+suporte em que ninguém sabe que o código trocou no meio.
 
 > **`versao_embutida()` lê de variável de ambiente, não da constante.** `main.py` grava
-> `ROGER_EVENTOS_VERSAO_EXE` antes de trocar o código. Sem isso, depois de uma
+> `RE_PLAY_VERSAO_EXE` antes de trocar o código. Sem isso, depois de uma
 > atualização o próprio `atualizador_app` passaria a ser o baixado e sua constante
 > devolveria a versão da atualização — fazendo `core/atualizador.py` concluir que o
 > `.exe` foi reinstalado e rebaixar o yt-dlp a cada atualização do app.
 
-## Entregar ao Rogério: o instalador
+## Entregar ao usuário: o instalador
 
-O que se manda para ele é **`instalador/Saida/Instalar-RogerEventos-BaixadorDeMusicas.exe`** (~142 MB). Ele executa, clica em Avançar e ganha atalho na Área de Trabalho e no Menu Iniciar.
+O que se manda para ele é **`instalador/Saida/Instalar-REPlay-BaixadorDeMusicas.exe`** (~142 MB). Ele executa, clica em Avançar e ganha atalho na Área de Trabalho e no Menu Iniciar.
 
 ```
 cd app
@@ -189,25 +189,25 @@ Inno Setup é gratuito (`winget install JRSoftware.InnoSetup`). O winget instala
 
 A versão do instalador é **lida de `app/core/versao.py`** pelo pré-processador do Inno —
 não há número duplicado para esquecer de subir. Sem isso, o instalador dizia sempre
-1.0.0 e era impossível saber o que o Rogério tinha instalado.
+1.0.0 e era impossível saber o que o usuário tinha instalado.
 
 **Decisões do instalador (`instalador/RogerEventos.iss`) e o porquê:**
 
-- **`PrivilegesRequired=lowest`** → instala em `%LOCALAPPDATA%\Programs\RogerEventos`. Instalar em "Arquivos de Programas" exigiria administrador **e o Windows bloquearia a escrita do app**. É o mesmo modelo do Chrome e do VS Code.
-- **As músicas vão para `Músicas\Roger Eventos`** (lido do registro do Windows, não `~/Music` chutado — muita gente tem essa pasta movida pelo OneDrive).
+- **`PrivilegesRequired=lowest`** → instala em `%LOCALAPPDATA%\Programs\REPlay`. Instalar em "Arquivos de Programas" exigiria administrador **e o Windows bloquearia a escrita do app**. É o mesmo modelo do Chrome e do VS Code.
+- **As músicas vão para `Músicas\RE Play`** (lido do registro do Windows, não `~/Music` chutado — muita gente tem essa pasta movida pelo OneDrive).
 - **Config, log e atualizações vão para `%LOCALAPPDATA%\RogerEventos`** (`organizer.pasta_dados()`), separados do local de instalação. Sem isso, uma instalação em pasta protegida faria o app abrir mas não gravar nada.
-- **Desinstalar NÃO apaga as músicas** — só a config e o log. As músicas são o trabalho do Rogério. *Testado: criei um MP3, desinstalei, o arquivo sobreviveu e a config foi removida.*
+- **Desinstalar NÃO apaga as músicas** — só a config e o log. As músicas são o trabalho do usuário. *Testado: criei um MP3, desinstalei, o arquivo sobreviveu e a config foi removida.*
 
 **O aviso azul do Windows (SmartScreen) vai aparecer** no primeiro uso, com ou sem instalador: o executável não tem assinatura digital paga (~US$200/ano, não compensa para uso interno). Orientar: "Mais informações" → "Executar assim mesmo".
 
-## Gerar o .exe para o Rogério
+## Gerar o .exe para o usuário
 
 ```
 cd app
 pyinstaller build.spec
 ```
 
-Saída: `app\dist\RogerEventos-BaixadorDeMusicas.exe`.
+Saída: `app\dist\REPlay-BaixadorDeMusicas.exe`.
 
 > **Fechar o app antes de regerar.** Com o `.exe` aberto, o PyInstaller falha com
 > `PermissionError: [WinError 5] Acesso negado` e **mantém o executável antigo no lugar**.
@@ -218,7 +218,7 @@ Saída: `app\dist\RogerEventos-BaixadorDeMusicas.exe`.
 > PyInstaller — a build falhada aparecia como sucesso. **Conferir o código de saída sem
 > cano no meio, e conferir a data do `.exe` gerado.**
 
-**Esse `.exe` é o único arquivo a distribuir.** Ele leva Python, bibliotecas e o ffmpeg embutidos. Na máquina do Rogério é só copiar e dar duplo-clique — sem instalar Python, sem instalar ffmpeg, sem configurar credencial, sem arquivo do lado.
+**Esse `.exe` é o único arquivo a distribuir.** Ele leva Python, bibliotecas e o ffmpeg embutidos. Na máquina do usuário é só copiar e dar duplo-clique — sem instalar Python, sem instalar ffmpeg, sem configurar credencial, sem arquivo do lado.
 
 ## O YouTube bloqueia downloads automatizados (importante)
 
@@ -239,7 +239,7 @@ Este é o problema mais sério do projeto e provavelmente o que mais vai dar tra
 
 **Defesas implementadas:**
 1. `OPCOES_REDE` em `core/youtube.py` limita retentativas — falha em segundos com mensagem clara em vez de travar 5 minutos sem retorno.
-2. `_executar_com_fallback()` tenta o download normalmente e, ao detectar bloqueio de bot, repete usando cookies do navegador do usuário (Chrome → Edge → Firefox → Brave → Opera → Vivaldi), memorizando qual funcionou. Zero configuração para o Rogério.
+2. `_executar_com_fallback()` tenta o download normalmente e, ao detectar bloqueio de bot, repete usando cookies do navegador do usuário (Chrome → Edge → Firefox → Brave → Opera → Vivaldi), memorizando qual funcionou. Zero configuração para o usuário.
 3. **Deno empacotado** (`tools/baixar_deno.py` → `app/bin/deno.exe`): o yt-dlp precisa de um runtime JavaScript para resolver os desafios do YouTube; sem ele cai em caminhos lentos/frágeis.
 4. `eh_playlist()` passou a decidir pela URL, sem consultar a rede — **sozinho economizou 322s por download avulso**, porque a consulta era feita e logo repetida pelo download.
 
@@ -274,7 +274,7 @@ Duas armadilhas do seletor, ambas pegas por teste e não a olho nu:
 
 Toda entrega de vídeo grava no `registro.txt` a resolução obtida e o cliente usado. Sem isso, "baixou ruim" não tem como ser diagnosticado à distância.
 
-**2. Pasta separada** (`Vídeos\Roger Eventos`, chave `pasta_videos`). Serato e Rekordbox varrem a pasta de músicas para montar a biblioteca — um MP4 de 200 MB no meio dos MP3 entra como faixa e bagunça o acervo de trabalho dele. Os botões "Abrir pasta"/"Alterar pasta" agem sobre a mídia do último download, e o rodapé diz qual é.
+**2. Pasta separada** (`Vídeos\RE Play`, chave `pasta_videos`). Serato e Rekordbox varrem a pasta de músicas para montar a biblioteca — um MP4 de 200 MB no meio dos MP3 entra como faixa e bagunça o acervo de trabalho dele. Os botões "Abrir pasta"/"Alterar pasta" agem sobre a mídia do último download, e o rodapé diz qual é.
 
 **3. Clipe, não áudio com imagem parada** (`matcher.escolher_melhor_clipe`). Buscar por duração pura — o que serve perfeitamente para música — traz os canais "- Topic", que são **capa estática**: ótimos como MP3, inúteis no telão. Para vídeo a tolerância sobe para ±30s (clipe tem intro e créditos, quase sempre dura mais que a faixa) e, dentro dela, clipe declarado ganha de upload comum, que ganha de áudio parado. Só sobrou áudio parado? Baixa e marca como "confira" — não falha.
 
@@ -288,7 +288,7 @@ Toda entrega de vídeo grava no `registro.txt` a resolução obtida e o cliente 
 
 **Link avulso de vídeo consulta o título antes de baixar** (`youtube.obter_titulo`, ~2s). Sem saber o nome do arquivo antes, o app não tem como responder duas perguntas: *já está na pasta?* e *o que apagar se ele cancelar?* Descoberto testando: sem essa consulta, colar o mesmo link duas vezes rebaixava os 200 MB, e cancelar no meio deixava `.part` e `.webp` para trás.
 
-> **Isso vale só para vídeo.** Para música o download inteiro leva ~10s e os 2s não se pagariam; além disso, o caminho da música nomeia pelo `%(title)s` do yt-dlp desde sempre, e trocar o esquema de nome faria o Rogério rebaixar a biblioteca que já tem. **Não estender essa consulta à música sem resolver o nome legado.**
+> **Isso vale só para vídeo.** Para música o download inteiro leva ~10s e os 2s não se pagariam; além disso, o caminho da música nomeia pelo `%(title)s` do yt-dlp desde sempre, e trocar o esquema de nome faria o usuário rebaixar a biblioteca que já tem. **Não estender essa consulta à música sem resolver o nome legado.**
 
 **Onde tudo isso vive:** `PerfilMidia` em `core/pipeline.py` concentra o que muda entre música e vídeo (extensão, pasta, função de download, critério de escolha, número de fluxos). Preferir estender o perfil a espalhar `if é vídeo` pelo arquivo.
 
@@ -300,7 +300,7 @@ Toda entrega de vídeo grava no `registro.txt` a resolução obtida e o cliente 
 
 **Retentativa por faixa** (`_com_retentativa`): até 3 tentativas com espera de 2s e 5s. **Não repete** quando `youtube.e_bloqueio_definitivo()` diz que é inútil (vídeo privado/removido, ou bloqueio que já esgotou todos os clientes e cookies) — insistir aí só faria o usuário esperar sem chance de sucesso. Parciais são limpos antes de cada nova tentativa.
 
-**Atualização automática do yt-dlp** (`core/atualizador.py`): o yt-dlp vai congelado no `.exe` e quebra quando o YouTube muda algo — e o Rogério não tem como regerar o executável. Uma vez por semana, em segundo plano, o app consulta o GitHub; se houver versão nova, baixa o sdist e extrai só o pacote `yt_dlp/` para `atualizacoes/` ao lado do `.exe` (yt-dlp é Python puro: `tarfile`+`urllib`, sem pip). No arranque seguinte, `main.py` chama `atualizador.preparar_sys_path()` **antes de qualquer import de yt_dlp**.
+**Atualização automática do yt-dlp** (`core/atualizador.py`): o yt-dlp vai congelado no `.exe` e quebra quando o YouTube muda algo — e o usuário não tem como regerar o executável. Uma vez por semana, em segundo plano, o app consulta o GitHub; se houver versão nova, baixa o sdist e extrai só o pacote `yt_dlp/` para `atualizacoes/` ao lado do `.exe` (yt-dlp é Python puro: `tarfile`+`urllib`, sem pip). No arranque seguinte, `main.py` chama `atualizador.preparar_sys_path()` **antes de qualquer import de yt_dlp**.
 
 > **Regra de ouro do atualizador:** uma atualização ruim nunca pode deixar o app pior que estava. Se o `yt_dlp` atualizado não importar, `preparar_sys_path()` apaga a pasta e volta ao embutido. Isso foi testado com um pacote propositalmente corrompido.
 >
@@ -315,7 +315,7 @@ Toda entrega de vídeo grava no `registro.txt` a resolução obtida e o cliente 
 
 **Cancelar** (`CancelamentoSolicitado` em `core/pipeline.py`): a GUI passa um `threading.Event`; a checagem fica **dentro do `hook_ytdlp`**, não só entre faixas — sem isso, cancelar no meio de um arquivo de 20 MB só teria efeito quando ele terminasse. Ao cancelar, os parciais da faixa em curso são apagados e o que já concluiu permanece.
 
-**Relatório de erros** (`core/registro.py`): `registro.txt` ao lado do `.exe`, com rotação (2 MB, 2 cópias). Botão no rodapé abre no Bloco de Notas. Registra o pedido, cada falha com traceback, as faixas marcadas como duvidosas (com a diferença de duração) e o resumo. É o que permite diagnosticar um problema na máquina do Rogério sem estar lá.
+**Relatório de erros** (`core/registro.py`): `registro.txt` ao lado do `.exe`, com rotação (2 MB, 2 cópias). Botão no rodapé abre no Bloco de Notas. Registra o pedido, cada falha com traceback, as faixas marcadas como duvidosas (com a diferença de duração) e o resumo. É o que permite diagnosticar um problema na máquina do usuário sem estar lá.
 
 Toda abertura grava também a **versão em uso e se ela é a embutida ou a atualizada** —
 sem isso, diante de um relato de erro não haveria como saber qual código ele está
@@ -327,7 +327,7 @@ rodando, já que o `.exe` e o código podem estar em versões diferentes.
 
 > **Nunca voltar a usar uma constante de módulo para essa pasta.** Ela precisa ser lida por função (`obter_pasta_downloads()`), senão a escolha do usuário só valeria depois de reiniciar o app.
 
-**Nome do arquivo: música primeiro** — `{música} - {artista}.mp3`. Mudou em 2026-08-07 a pedido do Vitor: numa festa se procura pelo nome da música, não pelo artista. `nome_arquivo_faixa_legado()` guarda o formato antigo (`{artista} - {música}`) **só** para `_ja_existe` reconhecer downloads anteriores e não baixar tudo de novo — não remover sem antes considerar quem já tem biblioteca no formato antigo.
+**Nome do arquivo: música primeiro** — `{música} - {artista}.mp3`. Mudou em 2026-08-07: numa festa se procura pelo nome da música, não pelo artista. `nome_arquivo_faixa_legado()` guarda o formato antigo (`{artista} - {música}`) **só** para `_ja_existe` reconhecer downloads anteriores e não baixar tudo de novo — não remover sem antes considerar quem já tem biblioteca no formato antigo.
 
 ### O que conta como "já baixado"
 
@@ -341,7 +341,7 @@ Resolve bem o caso real (repetir uma playlist não rebaixa nada). Uma detecção
 
 ## Relatório automático de erros (chega no GitHub sozinho)
 
-Desde 2026-08-08, um erro na máquina do Rogério não fica mais preso lá. O caminho:
+Desde 2026-08-08, um erro na máquina do usuário não fica mais preso lá. O caminho:
 
 ```
 app (core/ocorrencias.py)  ──▶  Apps Script (Google, a "caixa de correio")  ──▶  Issue no GitHub
@@ -357,8 +357,8 @@ qualquer um escrito no futuro — vira ocorrência **sem precisar alterar esses 
 `.exe` é extraível (repositório público) e **vence com o tempo** — quando vencesse, o
 envio morreria em silêncio, exatamente o que este sistema existe para evitar. Por isso o
 app só deposita a ficha num endereço que **só recebe** (`URL_RECEPTOR` em
-`ocorrencias.py`, vazio até ser configurado); a chave mora do lado do Vitor, nunca no
-app. Ver o cabeçalho de `tools/receptor_erros.gs` para instalar o Apps Script (uma vez
+`ocorrencias.py`, vazio até ser configurado); a chave mora do lado de quem mantém o app,
+nunca no app. Ver o cabeçalho de `tools/receptor_erros.gs` para instalar o Apps Script (uma vez
 só: colar o script, guardar `GITHUB_TOKEN`/`GITHUB_REPO` em Script Properties, implantar
 como Web App, colar a URL gerada em `ocorrencias.py` e publicar uma atualização).
 
@@ -376,9 +376,9 @@ duas threads de atualização) e toda função de `ocorrencias.py` engole exceç
 internet, a ficha fica em `pasta_dados()/ocorrencias/*.json` e sai na próxima abertura.
 Teto de 20 envios/dia e 50 arquivos na fila, para um defeito em laço não virar enxurrada.
 
-**O que o Rogério vê**: uma linha explicando o envio na primeira abertura, e depois
-*"Já avisei o Vitor sobre isso (relatório #a3f9c1)"* quando algo falha. O botão
-"📨 Avisar o Vitor" manda a fila na hora ou abre um relato manual — a saída para quando
+**O que o usuário vê**: uma linha explicando o envio na primeira abertura, e depois
+*"Problema já relatado (relatório #a3f9c1)"* quando algo falha. O botão
+"📨 Relatar problema" manda a fila na hora ou abre um relato manual — a saída para quando
 o app não acusou erro nenhum mas o resultado saiu errado (ninguém automatiza isso).
 Desligar: `enviar_erros: false` em `configuracao.json`.
 
@@ -391,15 +391,15 @@ autenticado).
 
 **Onde ficam os chamados**: repositório **privado** separado do app (ex.:
 `roger-eventos-erros`). O repositório do app continua público — a atualização
-automática depende disso — mas os relatórios carregam o link que o Rogério colou e
+automática depende disso — mas os relatórios carregam o link que o usuário colou e
 trechos do registro, e não precisam ficar visíveis à internet inteira.
 
 ## Limitações conhecidas
 
-- **Playlists do Spotify acima de ~50 faixas**: a página pública devolve a lista em blocos e pode não trazer tudo. O app avisa no log quando o total cai num tamanho suspeito. Não validado com playlist grande de verdade — o Rogério trabalha com playlists menores que isso.
+- **Playlists do Spotify acima de ~50 faixas**: a página pública devolve a lista em blocos e pode não trazer tudo. O app avisa no log quando o total cai num tamanho suspeito. Não validado com playlist grande de verdade — o usuário trabalha com playlists menores que isso.
 - **Formato da página do Spotify pode mudar**: ver "Decisões técnicas" acima.
 - **yt-dlp precisa ser atualizado periodicamente** (`pip install -U yt-dlp`) quando o YouTube muda algo — o projeto costuma lançar correção rápido. Depois de atualizar, gerar o `.exe` de novo.
-- **Uso comercial**: baixar do YouTube para tocar em eventos pagos pode esbarrar em direitos autorais e nos Termos de Uso do YouTube. O app resolve o lado técnico; licenciamento musical para eventos (ECAD etc.) é responsabilidade do Rogério. Com vídeo isso fica mais visível: exibir clipe em telão é execução pública de obra audiovisual.
+- **Uso comercial**: baixar do YouTube para tocar em eventos pagos pode esbarrar em direitos autorais e nos Termos de Uso do YouTube. O app resolve o lado técnico; licenciamento musical para eventos (ECAD etc.) é responsabilidade do usuário. Com vídeo isso fica mais visível: exibir clipe em telão é execução pública de obra audiovisual.
 - **Vídeo não tem escolha de resolução na janela**: é sempre até 1080p. Existe a chave `ALTURA_MAXIMA_VIDEO` em `core/youtube.py` para mudar isso no código; só virar botão se ele pedir.
 - **Cancelar durante a junção de imagem e som não interrompe**: essa etapa (ffmpeg) leva alguns segundos e não é cancelável no meio. O cancelamento vale durante o download, que é a parte longa.
 - **Vídeo do Spotify depende de existir clipe no YouTube**: se a faixa só tiver upload de áudio com capa estática, é isso que vem — marcado como "pode ser só o áudio, sem imagem" no final.
@@ -408,7 +408,7 @@ trechos do registro, e não precisam ficar visíveis à internet inteira.
 
 - 2026-08-06: avaliado spotDL e a API oficial do Spotify; ambos descartados pelos motivos acima. Caminho escolhido: leitura da página pública, sem credencial.
 - 2026-08-07: atualização automática do app. Avaliado baixar o `.exe` inteiro (~142 MB) e descartado: pesado e, no Windows, um programa não consegue se sobrescrever enquanto está aberto — exigiria um processo auxiliar, mais peça para quebrar. Trocar só `core/` e `gui/` resolve a grande maioria dos casos com 26 KB.
-- 2026-08-07: avaliada uma trava que seguraria atualizações de sexta a domingo, para não trocar o código do app em dia de evento. **Descartada pelo Vitor:** o Rogério baixa as músicas com antecedência e deixa tudo programado antes da festa, então não há app rodando durante o evento para proteger. A trava só atrasaria correção. *Registrado aqui porque a ideia parece boa até se saber como ele trabalha de verdade.*
-- 2026-08-07: repositório **público** por decisão do Vitor. Privado exigiria uma chave dentro do `.exe`, que é extraível (ou seja, protege pouco) e **vence com o tempo** — quando vencesse, as atualizações parariam em silêncio. O app não guarda credencial nem dado do Rogério, então não havia o que proteger.
-- 2026-08-08: relatório automático de erros. Avaliado o app criar a Issue direto no GitHub e descartado pela mesma razão do ponto acima — chave extraível do `.exe` e que vence em silêncio. Escolhido um intermediário (Apps Script) que guarda a chave do lado do Vitor. Avaliado também mandar cada erro sem agrupar; descartado porque uma playlist com o YouTube bloqueado gera dezenas de falhas idênticas, e isso viraria ruído que ninguém lê — daí a impressão digital que agrupa repetições no mesmo chamado. **Pendente de ativação:** `URL_RECEPTOR` em `core/ocorrencias.py` está vazio até o Apps Script ser instalado (ver seção acima) e o repositório privado de erros ser criado; até lá o sistema fica pronto mas inerte (`enviar_pendentes` devolve 0 sem erro).
+- 2026-08-07: avaliada uma trava que seguraria atualizações de sexta a domingo, para não trocar o código do app em dia de evento. **Descartada:** o usuário baixa as músicas com antecedência e deixa tudo programado antes da festa, então não há app rodando durante o evento para proteger. A trava só atrasaria correção. *Registrado aqui porque a ideia parece boa até se saber como o uso real funciona.*
+- 2026-08-07: repositório **público** por decisão de quem mantém o app. Privado exigiria uma chave dentro do `.exe`, que é extraível (ou seja, protege pouco) e **vence com o tempo** — quando vencesse, as atualizações parariam em silêncio. O app não guarda credencial nem dado do usuário, então não havia o que proteger.
+- 2026-08-08: relatório automático de erros. Avaliado o app criar a Issue direto no GitHub e descartado pela mesma razão do ponto acima — chave extraível do `.exe` e que vence em silêncio. Escolhido um intermediário (Apps Script) que guarda a chave do lado de quem mantém o app. Avaliado também mandar cada erro sem agrupar; descartado porque uma playlist com o YouTube bloqueado gera dezenas de falhas idênticas, e isso viraria ruído que ninguém lê — daí a impressão digital que agrupa repetições no mesmo chamado. **Pendente de ativação:** `URL_RECEPTOR` em `core/ocorrencias.py` está vazio até o Apps Script ser instalado (ver seção acima) e o repositório privado de erros ser criado; até lá o sistema fica pronto mas inerte (`enviar_pendentes` devolve 0 sem erro).
 - Ajustar a tolerância de duração em `core/matcher.py` (hoje ±5s) se aparecerem muitos falsos "incerto" ou muitas versões erradas na prática.

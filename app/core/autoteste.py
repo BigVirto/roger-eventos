@@ -5,7 +5,7 @@ congelado no `.exe` — o portão de entrega ficava justamente fora do alcance d
 atualização automática, e todo ajuste no teste exigia instalador novo. Daqui, o teste
 evolui junto com o resto do código.
 
-Rodar: `python app/main.py --autoteste`, ou `RogerEventos-BaixadorDeMusicas.exe --autoteste`.
+Rodar: `python app/main.py --autoteste`, ou `REPlay-BaixadorDeMusicas.exe --autoteste`.
 Termina com `RESULTADO: TUDO OK` (saída 0) ou `RESULTADO: N FALHA(S)` (saída 1).
 """
 

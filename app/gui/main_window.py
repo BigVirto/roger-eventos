@@ -11,12 +11,13 @@ não fica ligada: um seletor esquecido em "vídeo" transformaria a próxima play
 import queue
 import subprocess
 import threading
+import time
 from pathlib import Path
 from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
 
-from core import ocorrencias, registro
+from core import mensagens, ocorrencias, registro
 from core.atualizador_app import versao_mudou_desde_a_ultima_vez
 from core.organizer import (
     abrir_pasta,
@@ -59,8 +60,17 @@ class JanelaPrincipal(ctk.CTk):
         # e "Alterar pasta" fazerem o que ele espera sem precisar de botões duplicados
         # num rodapé que já tem quatro.
         self._midia_atual = MUSICA
+        # Onde o último download REALMENTE gravou (playlist cria subpasta). Ver
+        # `_pasta_atual` para a diferença entre esta e a pasta configurada.
+        self._ultima_pasta: Path | None = None
+        # Guardada para conseguir esperá-la ao fechar a janela no meio de um download.
+        self._thread_trabalho: threading.Thread | None = None
+        self._inicio: float = 0.0
 
         self._montar_widgets()
+        # Fechar no meio de uma playlist matava o download e deixava pedaços de arquivo
+        # na pasta, porque a limpeza de parciais nunca chegava a rodar.
+        self.protocol("WM_DELETE_WINDOW", self._ao_fechar)
         self._avisar_se_atualizou()
 
         # Relatório de erros. Fica aqui, e não em main.py, de propósito: main.py é o
@@ -192,14 +202,32 @@ class JanelaPrincipal(ctk.CTk):
             anchor="e",
         ).pack(side="right", padx=(12, 0))
 
-    def _pasta_atual(self) -> Path:
-        """Pasta da mídia do último download — é sobre ela que o rodapé age."""
+    def _pasta_base(self) -> Path:
+        """A pasta CONFIGURADA da mídia atual. É sobre ela que "Alterar pasta" age.
+
+        Nunca pode virar a subpasta de uma playlist: ele acabaria configurando "Top Brasil"
+        como destino de tudo sem perceber.
+        """
         return obter_pasta_videos() if self._midia_atual == VIDEO else obter_pasta_downloads()
+
+    def _pasta_atual(self) -> Path:
+        """Onde os arquivos do último download realmente estão.
+
+        Playlist e álbum criam uma subpasta com o nome da lista, então a pasta configurada
+        não responde "onde estão minhas músicas". Antes disto, "📂 Abrir pasta" abria a
+        pasta de cima e ele não via as 40 faixas que tinha acabado de baixar.
+        """
+        return self._ultima_pasta or self._pasta_base()
 
     def _texto_pasta(self) -> str:
         # Diz qual é a mídia, senão o rodapé mudaria de pasta sozinho sem explicação.
         tipo = "vídeos" if self._midia_atual == VIDEO else "músicas"
-        return f"Salvando {tipo} em: {self._pasta_atual()}"
+        # O verbo acompanha o que o botão ao lado faz: enquanto não há download nesta
+        # sessão, ele aponta para onde VAI salvar; depois, para onde os arquivos ESTÃO.
+        verbo = "Últim" + ("os vídeos" if self._midia_atual == VIDEO else "as músicas") + " em"
+        if self._ultima_pasta is None:
+            verbo = f"Salvando {tipo} em"
+        return f"{verbo}: {self._pasta_atual()}"
 
     def _definir_midia_atual(self, midia: str) -> None:
         self._midia_atual = midia
@@ -259,7 +287,9 @@ class JanelaPrincipal(ctk.CTk):
         tipo = "os vídeos" if e_video else "as músicas"
         escolhida = filedialog.askdirectory(
             title=f"Escolha onde salvar {tipo}",
-            initialdir=str(self._pasta_atual().parent),
+            # Base, não `_pasta_atual()`: o seletor tem de abrir perto da pasta que ele
+            # está trocando, não dentro da subpasta da última playlist.
+            initialdir=str(self._pasta_base().parent),
         )
         if not escolhida:  # usuário fechou o seletor
             return
@@ -284,6 +314,9 @@ class JanelaPrincipal(ctk.CTk):
             definir_pasta_videos(destino)
         else:
             definir_pasta_downloads(destino)
+        # A pasta do último download deixou de valer: o rodapé passaria a mostrar um
+        # caminho antigo logo depois de ele escolher um novo.
+        self._ultima_pasta = None
         self.rotulo_pasta.configure(text=self._texto_pasta())
         self._escrever(f"  Pasta de {'vídeos' if e_video else 'músicas'} alterada para: {destino}")
         registro.info(f"pasta de {'vídeos' if e_video else 'músicas'} alterada para: {destino}")
@@ -308,6 +341,10 @@ class JanelaPrincipal(ctk.CTk):
 
     def _iniciar(self, midia: str = MUSICA) -> None:
         if self._baixando:
+            # Sair calado fazia ele clicar de novo, mais forte, achando que travou.
+            self.rotulo_status.configure(
+                text="Já estou baixando. Espere terminar ou clique em Cancelar."
+            )
             return
         texto = self.campo_link.get().strip()
         if not texto:
@@ -317,6 +354,10 @@ class JanelaPrincipal(ctk.CTk):
         e_video = midia == VIDEO
         self._baixando = True
         self._cancelar.clear()
+        self._inicio = time.monotonic()
+        # Enquanto baixa, o rodapé volta a apontar para a pasta configurada: a do download
+        # anterior deixou de ser a resposta e a nova ainda não se sabe.
+        self._ultima_pasta = None
         self._definir_midia_atual(midia)
         # Os dois travam: o que foi clicado explica o que está acontecendo, o outro só
         # não pode aceitar clique no meio de um download.
@@ -336,7 +377,10 @@ class JanelaPrincipal(ctk.CTk):
         # rende pouco na hora de corrigir.
         ocorrencias.definir_pedido_atual(f"[{midia}] {texto}")
 
-        threading.Thread(target=self._trabalhar, args=(texto, midia), daemon=True).start()
+        self._thread_trabalho = threading.Thread(
+            target=self._trabalhar, args=(texto, midia), daemon=True
+        )
+        self._thread_trabalho.start()
 
     def _cancelar_download(self) -> None:
         self._cancelar.set()
@@ -393,7 +437,9 @@ class JanelaPrincipal(ctk.CTk):
                     self._destravar()
 
                 elif tipo == "erro_geral":
-                    self._escrever(f"  ERRO: {dado}", "erro")
+                    # Traduzido só aqui, na tela. O texto técnico inteiro já foi para o
+                    # registro e para o relatório automático em `_trabalhar`.
+                    self._escrever(f"  ERRO: {mensagens.traduzir(dado)}", "erro")
                     self._contar_que_avisou(dado)
                     self.rotulo_status.configure(
                         text="Não deu certo. Veja o relatório de erros para detalhes."
@@ -438,6 +484,12 @@ class JanelaPrincipal(ctk.CTk):
         pulados = resultado.pulados
         baixados = resultado.baixados
 
+        # A pasta de verdade, que no caso de playlist é uma subpasta. `getattr` porque uma
+        # atualização pode trocar gui/ e core/ em pares diferentes: sem o campo, o rodapé
+        # volta ao comportamento antigo em vez de estourar.
+        self._ultima_pasta = getattr(resultado, "pasta", None) or self._pasta_base()
+        self.rotulo_pasta.configure(text=self._texto_pasta())
+
         e_video = self._midia_atual == VIDEO
         self.barra.set(1)
         partes = [f"{len(baixados)} {'vídeo(s)' if e_video else 'baixada(s)'}"]
@@ -448,7 +500,7 @@ class JanelaPrincipal(ctk.CTk):
         self._escrever(f"  Concluído: {', '.join(partes)} (de {total}).", "sucesso")
 
         for f in falhas:
-            self._escrever(f"  ✗ {f.nome} — {f.erro}", "erro")
+            self._escrever(f"  ✗ {f.nome} — {mensagens.traduzir(f.erro)}", "erro")
         for i in incertas:
             aviso = "pode ser só o áudio, sem imagem" if e_video else "confira esta"
             self._escrever(f"  ⚠ {aviso}: {i.nome}", "atencao")
@@ -458,20 +510,114 @@ class JanelaPrincipal(ctk.CTk):
             # anunciar um código por faixa daria a impressão errada de vários chamados.
             self._escrever("  Essas falhas já foram relatadas.")
 
+        if falhas:
+            # Repetir o mesmo pedido já baixa só o que falta — `_ja_existe` pula o que
+            # está na pasta. Funcionava desde sempre, mas ninguém tinha contado a ele.
+            self._escrever(
+                "  Clique de novo no mesmo botão para tentar só as que faltaram.", "atencao"
+            )
+
         resumo = f"Pronto! {', '.join(partes)}."
         if incertas:
             resumo += f" {len(incertas)} para conferir."
         self.rotulo_status.configure(text=resumo)
-        self._destravar()
+        # Deu tudo certo, campo limpo para o próximo link. Sobrou falha, o link fica lá
+        # para ele repetir com um clique.
+        self._destravar(limpar=not falhas)
+        self._chamar_atencao()
 
-    def _destravar(self) -> None:
+    def _destravar(self, limpar: bool = False) -> None:
+        """Devolve os botões. `limpar` só quando o pedido terminou sem pendência.
+
+        Antes o campo era limpo sempre, inclusive no erro — e aí, para tentar de novo, ele
+        tinha que voltar ao navegador e copiar o link outra vez, justamente no momento em
+        que mais queria repetir.
+        """
         self.botao.configure(state="normal", text="♪ Música")
         self.botao_video.configure(state="normal", text="▶ Vídeo")
         self.botao_cancelar.pack_forget()
         self.botao_cancelar.configure(state="normal", text="Cancelar")
-        self.campo_link.delete(0, "end")
+        if limpar:
+            self.campo_link.delete(0, "end")
+        else:
+            # Selecionado: um Ctrl+V substitui de uma vez, sem ele precisar apagar antes.
+            self.campo_link.select_range(0, "end")
+            self.campo_link.focus()
         self._cancelar.clear()
         self._baixando = False
+
+    # -------------------------------------------------------------- fim do trabalho
+
+    def _chamar_atencao(self) -> None:
+        """Avisa que terminou quando ele não está olhando.
+
+        Playlist grande leva meia hora; ele sai de perto e ficava voltando na janela para
+        conferir. Só dispara em trabalho longo e com a janela fora de foco — apitar ao fim
+        de uma música solta de 10 segundos, com ele olhando, seria só barulho.
+        """
+        if time.monotonic() - self._inicio < 30:
+            return
+        if self.focus_displayof() is not None:  # ele está com a janela na frente
+            return
+
+        try:
+            self.bell()
+        except Exception:  # noqa: BLE001 - sem som configurado não é motivo de erro
+            pass
+
+        # Piscar o botão na barra de tarefas é o aviso que o Windows já tem para isto, e
+        # sai por `ctypes` — sem biblioteca nova, o que importa porque o pacote de
+        # atualização automática só troca arquivos .py e não instala dependência nenhuma.
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            class _FLASHWINFO(ctypes.Structure):
+                _fields_ = [
+                    ("cbSize", wintypes.UINT),
+                    ("hwnd", wintypes.HWND),
+                    ("dwFlags", wintypes.DWORD),
+                    ("uCount", wintypes.UINT),
+                    ("dwTimeout", wintypes.DWORD),
+                ]
+
+            # FLASHW_ALL (3) | FLASHW_TIMERNOFG (12): pisca até ele olhar a janela.
+            info = _FLASHWINFO(
+                ctypes.sizeof(_FLASHWINFO), wintypes.HWND(self.winfo_id()), 3 | 12, 5, 0
+            )
+            ctypes.windll.user32.FlashWindowEx(ctypes.byref(info))
+        except Exception:  # noqa: BLE001 - enfeite; nunca pode derrubar o fim de um download
+            pass
+
+    def _ao_fechar(self) -> None:
+        """Confirma antes de abandonar um download em andamento.
+
+        Fechar no meio matava o processo com o arquivo pela metade, e a limpeza de
+        parciais (`_limpar_parciais`, em core/pipeline.py) nunca chegava a rodar — sobrava
+        `.part`, `.webp` e `.m4a` na pasta, que ele veria como música quebrada.
+        """
+        if not self._baixando:
+            self.destroy()
+            return
+
+        if not messagebox.askyesno(
+            "Download em andamento",
+            "Ainda estou baixando. Fechar mesmo assim?\n\n"
+            "O que já baixou continua na pasta; o arquivo atual é descartado.",
+            icon="warning",
+        ):
+            return
+
+        # Cancelar antes de sair é o que dá ao pipeline a chance de apagar os parciais. A
+        # checagem mora dentro do hook do yt-dlp, então a saída vem em menos de um segundo;
+        # os 3s são teto para nunca deixar a janela presa se algo travar.
+        self._cancelar.set()
+        self.rotulo_status.configure(text="Parando e limpando...")
+        self.update_idletasks()
+        if self._thread_trabalho is not None:
+            self._thread_trabalho.join(timeout=3)
+        registro.info("app fechado durante um download, a pedido do usuário")
+        self.destroy()
 
 
 def iniciar() -> None:

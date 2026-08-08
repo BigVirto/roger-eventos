@@ -1,7 +1,7 @@
-"""Empacota uma atualização do app para o Rogério receber sem instalador novo.
+"""Empacota uma atualização do app para o usuário receber sem instalador novo.
 
 O que faz: junta `app/core/` e `app/gui/` num zip de ~100 KB e (opcionalmente) publica
-como release no GitHub. O app do Rogério procura esse release sozinho, baixa, e passa a
+como release no GitHub. O app do usuário procura esse release sozinho, baixa, e passa a
 usar o código novo na abertura seguinte.
 
 Usar:
@@ -9,7 +9,7 @@ Usar:
     python tools/publicar_atualizacao.py --publicar   # gera e publica no GitHub (usa gh)
 
 Antes de rodar: subir o número em `app/core/versao.py`. O app só aceita um pacote com
-versão MAIOR que a que ele já tem — sem subir, nada acontece na máquina do Rogério.
+versão MAIOR que a que ele já tem — sem subir, nada acontece na máquina do usuário.
 
 O que este caminho NÃO atualiza: Python, ffmpeg, deno, ícone e nome do programa. Isso
 mora dentro do .exe e continua exigindo instalador. Ver `workflows/baixar_musicas_app.md`.
@@ -70,7 +70,7 @@ def gerar_zip(versao: str) -> Path:
 
 
 def conferir(versao: str) -> None:
-    """Falha cedo nos erros que só apareceriam na máquina do Rogério."""
+    """Falha cedo nos erros que só apareceriam na máquina do usuário."""
     from core.atualizador_app import NOME_ASSET, esta_configurado  # noqa: F401
 
     if SAIDA.name != NOME_ASSET:
@@ -106,7 +106,7 @@ def publicar(versao: str, caminho_zip: Path) -> None:
         raise SystemExit("Falhou ao publicar. Confira 'gh auth status'.")
 
     print(f"[OK]    release v{versao} publicado.")
-    print("        O app do Rogerio pega em ate 6h e aplica na abertura seguinte.")
+    print("        O app do usuario pega em ate 6h e aplica na abertura seguinte.")
 
 
 if __name__ == "__main__":

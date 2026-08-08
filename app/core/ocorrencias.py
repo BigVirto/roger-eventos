@@ -1,7 +1,7 @@
-"""Manda os erros da máquina do Rogério para o Vitor, sozinho e em segundo plano.
+"""Manda os erros da máquina do usuário para quem mantém o app, sozinho e em segundo plano.
 
 Por que existe: `core/registro.py` já grava tudo em `registro.txt`, mas o arquivo fica
-parado na casa do Rogério. Alguém precisa pedir para ele abrir, achar e mandar — o que
+parado na máquina do usuário. Alguém precisa pedir para ele abrir, achar e mandar — o que
 na prática vira "não tá baixando" no WhatsApp e diagnóstico às cegas. Aqui o erro sobe
 sozinho e vira um chamado, e a correção desce pela atualização automática que já existe.
 
@@ -10,14 +10,14 @@ pendura um manipulador no logger que `core/registro.py` já usa. Toda chamada a
 `registro.erro()` que existe hoje — e qualquer uma escrita no futuro — vira ocorrência
 sem alterar uma linha de `pipeline.py` ou `youtube.py`.
 
-Caminho até o Vitor:
+Caminho até quem mantém o app:
 
     app  ──▶  Apps Script (Google)  ──▶  Issue no GitHub
 
 O app NÃO fala com o GitHub. Criar Issue exige uma chave, e chave dentro do .exe é
 extraível (o repositório é público) e, pior, vence — e o envio morreria em silêncio,
 sendo que quem avisaria disso é justamente este módulo. Então o app só deposita a carta
-num endereço que só recebe; a chave mora do outro lado, na conta do Vitor.
+num endereço que só recebe; a chave mora do outro lado, fora do app.
 
 Três regras que este arquivo nunca quebra:
 
@@ -80,7 +80,7 @@ def esta_configurado() -> bool:
 
 
 def envio_ligado() -> bool:
-    """O Rogério pode desligar mexendo em `configuracao.json`. Padrão: ligado."""
+    """O usuário pode desligar mexendo em `configuracao.json`. Padrão: ligado."""
     from core.organizer import obter_config
 
     return bool(obter_config(CHAVE_ENVIO, True))
@@ -182,7 +182,7 @@ def _ultimas_linhas_do_registro(quantas: int = LINHAS_DE_REGISTRO) -> str:
 
 
 def _identificador_da_maquina() -> str:
-    """Distingue máquinas sem dizer de quem são. Hoje só o Rogério usa; se um dia forem
+    """Distingue máquinas sem dizer de quem são. Hoje só uma pessoa usa; se um dia forem
     vários, é isto que separa "o app está quebrado" de "aquela máquina está estranha"."""
     try:
         cru = f"{platform.node()}|{getpass.getuser()}"
@@ -456,15 +456,15 @@ def iniciar_envio_em_segundo_plano() -> None:
 
 
 def enviar_agora() -> int:
-    """Botão "Avisar o Vitor agora": manda a fila inteira sem esperar o agrupamento."""
+    """Botão "Relatar problema agora": manda a fila inteira sem esperar o agrupamento."""
     return enviar_pendentes(forcar=True)
 
 
 def vai_avisar() -> bool:
-    """Se um erro agora viraria mesmo um aviso ao Vitor.
+    """Se um erro agora viraria mesmo um relatório enviado.
 
-    A janela consulta antes de escrever "já avisei" na tela: prometer isso com o envio
-    desligado ou sem endereço configurado seria mentir para o Rogério.
+    A janela consulta antes de escrever "já relatado" na tela: prometer isso com o envio
+    desligado ou sem endereço configurado seria mentir para o usuário.
     """
     return esta_configurado() and envio_ligado()
 
@@ -476,7 +476,7 @@ def codigo_do_erro(excecao: BaseException, mensagem: str = "") -> str:
 
 
 def relatar_manualmente(observacao: str = "") -> str | None:
-    """Relato pedido pelo Rogério, sem erro nenhum ter estourado.
+    """Relato pedido pelo usuário, sem erro nenhum ter estourado.
 
     Existe pelo mesmo motivo do `--reverter`: o caso em que o app funciona, não acusa
     falha, mas o resultado está errado (baixou a versão ao vivo, a playlist veio pela
@@ -484,7 +484,7 @@ def relatar_manualmente(observacao: str = "") -> str | None:
     """
     return registrar(
         "RelatoManual",
-        observacao or "o Rogério pediu para avisar o Vitor",
+        observacao or "o usuário pediu para relatar um problema",
         detalhe="Sem erro técnico: relato aberto pelo botão da janela.",
     )
 

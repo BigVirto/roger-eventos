@@ -1,7 +1,7 @@
 """Mantém o CÓDIGO DO APP atualizado sem precisar mandar instalador novo.
 
 Por que existe: até agora, qualquer melhoria (interface, leitura do Spotify, nome de
-arquivo, correção de bug) exigia gerar um instalador de ~142 MB e o Rogério instalar de
+arquivo, correção de bug) exigia gerar um instalador de ~142 MB e o usuário instalar de
 novo. Só o yt-dlp se atualizava sozinho, via `core/atualizador.py`.
 
 Como funciona: o app é Python puro em `core/` e `gui/` — texto, não binário. Dá para
@@ -53,13 +53,13 @@ ARQUIVO_VERSAO = "versao.txt"
 ARQUIVO_RECUSADA = "recusada.txt"
 
 # Onde main.py grava a versão do .exe antes de trocar o código. Ver versao_embutida().
-VARIAVEL_VERSAO_EXE = "ROGER_EVENTOS_VERSAO_EXE"
+VARIAVEL_VERSAO_EXE = "RE_PLAY_VERSAO_EXE"
 
 # Nota: chegou a existir aqui uma trava que segurava atualizações de sexta a domingo,
-# para não trocar o código do app em dia de evento. Removida a pedido do Vitor em
-# 2026-08-07: o Rogério baixa as músicas com antecedência e deixa tudo programado antes
-# da festa, então não há app rodando durante o evento para proteger. A trava só atrasaria
-# correção — e a maioria delas é justamente "o YouTube mudou e parou de baixar".
+# para não trocar o código do app em dia de evento. Removida em 2026-08-07: o usuário
+# baixa as músicas com antecedência e deixa tudo programado antes da festa, então não há
+# app rodando durante o evento para proteger. A trava só atrasaria correção — e a maioria
+# delas é justamente "o YouTube mudou e parou de baixar".
 
 # Módulos exigidos para considerar a atualização utilizável. Importar todos eles pega
 # erro de sintaxe e import quebrado — as falhas mais prováveis de um pacote ruim.
@@ -115,11 +115,11 @@ CHAVE_VERSAO_VISTA = "ultima_versao_vista"
 def versao_mudou_desde_a_ultima_vez() -> str | None:
     """Se a versão em uso mudou desde a última abertura, devolve a nova. Marca como vista.
 
-    Por que existe: atualizar sem pedir permissão é o certo aqui — o Rogério não teria
+    Por que existe: atualizar sem pedir permissão é o certo aqui — o usuário não teria
     como decidir, e recusar deixaria o app quebrado quando o YouTube mudasse. Mas
-    atualizar sem CONTAR é outra coisa: diante de "parou de funcionar", nem ele nem o
-    Vitor saberiam que o código mudou no meio. Avisar depois resolve isso sem transferir
-    a decisão para quem não tem base para tomá-la.
+    atualizar sem CONTAR é outra coisa: diante de "parou de funcionar", ninguém saberia
+    que o código mudou no meio. Avisar depois resolve isso sem transferir a decisão para
+    quem não tem base para tomá-la.
 
     Na primeira abertura não avisa nada — não houve mudança, só não havia registro.
     """
@@ -156,7 +156,7 @@ def descartar(recusar: bool = False) -> str | None:
 
     Com `recusar=True`, anota a versão descartada para não baixá-la de novo. Usar
     sempre que o descarte veio de um problema (pacote quebrado, app não abriu, ou o
-    Vitor rodou --reverter); sem isso o app rebaixaria a mesma versão em até 6 horas.
+    usuário rodou --reverter); sem isso o app rebaixaria a mesma versão em até 6 horas.
 
     Retorna a versão que foi descartada, ou None se não havia nada.
     """

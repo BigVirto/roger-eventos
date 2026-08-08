@@ -41,7 +41,7 @@ _ORDEM_FORMATO_VIDEO = ("res:{h}", "vcodec:h264", "acodec:aac", "ext:mp4")
 # O YouTube bloqueia downloads não autenticados com "Sign in to confirm you're not a bot".
 # A saída recomendada pelo próprio yt-dlp é reusar os cookies de um navegador onde o
 # usuário já está logado. Tentamos os navegadores em ordem e guardamos o que funcionar,
-# para o Rogério não precisar configurar nada.
+# para o usuário não precisar configurar nada.
 NAVEGADORES = ("chrome", "edge", "firefox", "brave", "opera", "vivaldi")
 _navegador_que_funciona: str | None = None
 
@@ -117,7 +117,7 @@ def e_bloqueio_definitivo(erro: Exception) -> bool:
     """Diz se insistir é inútil.
 
     Quando `_executar_com_fallback` desiste, já tentou todos os clientes, o cookies.txt
-    e todos os navegadores — repetir só faria o Rogério esperar à toa. O mesmo vale para
+    e todos os navegadores — repetir só faria o usuário esperar à toa. O mesmo vale para
     vídeo removido ou privado.
     """
     msg = str(erro).lower()

@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-# Gera o .exe do Baixador de Músicas do Roger Eventos.
+# Gera o .exe do Baixador de Músicas do RE Play.
 # Rodar de dentro de app/: pyinstaller build.spec
 
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
@@ -33,7 +33,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name="RogerEventos-BaixadorDeMusicas",
+    name="REPlay-BaixadorDeMusicas",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

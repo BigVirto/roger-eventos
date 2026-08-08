@@ -2,7 +2,7 @@
 
 Não usa a API oficial de propósito: desde 2026 ela exige assinatura Premium ativa do dono
 da credencial e não devolve playlists editoriais (Top Brasil e afins) — justamente as que o
-Rogério mais usa. A página pública de embed devolve nome, artista e duração de todas elas.
+usuário mais usa. A página pública de embed devolve nome, artista e duração de todas elas.
 
 Nunca baixa áudio daqui: o Spotify é só a fonte da LISTA. O áudio vem do YouTube.
 """
