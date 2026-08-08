@@ -93,6 +93,20 @@ deno, ícone, nome do programa, e o próprio `app/main.py`.
 volta ao embutido. É a única saída para o caso em que o código novo abre normalmente mas
 funciona mal — nenhuma checagem automática pega isso.
 
+> **Todo descarte por problema marca a versão como recusada** (`recusada.txt` em
+> `%LOCALAPPDATA%\RogerEventos\app_atualizado`). Descoberto testando o `.exe` de verdade
+> em 2026-08-07: sem isso, descartar só durava até a verificação seguinte — o app
+> rebaixava a mesma versão em até 6 horas e o problema voltava sozinho. A saída de
+> emergência não segurava nada.
+>
+> A recusa vale **só para aquela versão exata**. Publicar uma mais nova continua
+> chegando normalmente — é assim que o conserto alcança a máquina depois de uma
+> atualização ruim.
+
+**Para consertar uma versão ruim que já foi publicada:** subir o número em
+`core/versao.py` e publicar de novo. Não adianta republicar a mesma versão corrigida —
+o número já está recusado naquela máquina, e o release seria ignorado.
+
 ## Entregar ao Rogério: o instalador
 
 O que se manda para ele é **`instalador/Saida/Instalar-RogerEventos-BaixadorDeMusicas.exe`** (~142 MB). Ele executa, clica em Avançar e ganha atalho na Área de Trabalho e no Menu Iniciar.
@@ -180,6 +194,10 @@ Este é o problema mais sério do projeto e provavelmente o que mais vai dar tra
 **Cancelar** (`CancelamentoSolicitado` em `core/pipeline.py`): a GUI passa um `threading.Event`; a checagem fica **dentro do `hook_ytdlp`**, não só entre faixas — sem isso, cancelar no meio de um arquivo de 20 MB só teria efeito quando ele terminasse. Ao cancelar, os parciais da faixa em curso são apagados e o que já concluiu permanece.
 
 **Relatório de erros** (`core/registro.py`): `registro.txt` ao lado do `.exe`, com rotação (2 MB, 2 cópias). Botão no rodapé abre no Bloco de Notas. Registra o pedido, cada falha com traceback, as faixas marcadas como duvidosas (com a diferença de duração) e o resumo. É o que permite diagnosticar um problema na máquina do Rogério sem estar lá.
+
+Toda abertura grava também a **versão em uso e se ela é a embutida ou a atualizada** —
+sem isso, diante de um relato de erro não haveria como saber qual código ele está
+rodando, já que o `.exe` e o código podem estar em versões diferentes.
 
 > **Cuidado com `_limpar_parciais`:** ela lista o que sobrou e apaga tudo que não seja um MP3 completo, em vez de enumerar extensões. Uma versão anterior listava só `.part`/`.ytdl`/`.mp3` e deixava a miniatura `.webp` para trás. O yt-dlp deixa também `.m4a`/`.webm`. O nome é escapado antes do glob porque música com `[`, `]` ou `?` no título quebraria o padrão.
 
