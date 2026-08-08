@@ -9,7 +9,7 @@ Onde isso aparece:
 - `instalador/RogerEventos.iss` mostra este número em "Aplicativos instalados"
 """
 
-VERSAO = "1.3.0"
+VERSAO = "1.3.1"
 
 
 def como_tupla(versao: str) -> tuple[int, ...]:

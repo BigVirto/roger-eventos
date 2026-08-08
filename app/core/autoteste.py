@@ -18,7 +18,15 @@ from pathlib import Path
 # Vídeo curto e estável, do próprio canal do YouTube. Baixar um clipe de 4 minutos em
 # 1080p só para testar gastaria minutos e centenas de MB a cada rodada.
 URL_VIDEO_CURTO = "https://www.youtube.com/watch?v=jNQXAC9IVRw"  # "Me at the zoo", 19s
-ALTURA_TESTE_VIDEO = 480  # o que se testa é o formato e o merge, não a resolução
+ALTURA_TESTE_VIDEO = 480  # o download real só valida formato e merge — não a resolução
+
+# Clipe conhecidamente disponível em 1080p. Serve para a checagem de RESOLUÇÃO, que é
+# feita sem baixar nada: só pergunta ao YouTube quais formatos ele oferece.
+#
+# Esta checagem existe porque a versão 1.3.0 saiu entregando 360p e o autoteste disse
+# "TUDO OK": ele baixava um vídeo de 2005 que é 240p nativo, com o teto em 480p. Testar
+# resolução exige um vídeo que realmente TENHA resolução alta.
+URL_VIDEO_HD = "https://www.youtube.com/watch?v=kJQP7kiw5Fk"  # Despacito
 
 
 class _Placar:
@@ -117,6 +125,60 @@ def _testar_musica(placar: _Placar) -> None:
         placar.falha(f"Download de musica: {type(exc).__name__}: {str(exc)[:150]}")
 
 
+def _testar_resolucao_disponivel(placar: _Placar) -> None:
+    """Pergunta ao YouTube que resoluções o cliente de vídeo enxerga. Não baixa nada.
+
+    É a checagem que pega o defeito da 1.3.0: o cliente que passava no bloqueio anti-bot
+    só oferecia 360p, então TODO vídeo saía borrado — e nada no download acusava isso,
+    porque baixar 360p "dá certo".
+    """
+    import yt_dlp
+
+    from core.youtube import (
+        ALTURA_MINIMA_BOA,
+        OPCOES_REDE,
+        _executar_com_fallback,
+        _memoria_cliente,
+    )
+
+    def acao(extra: dict):
+        opcoes = {"quiet": True, "no_warnings": True, "noprogress": True,
+                  "skip_download": True, "noplaylist": True, **OPCOES_REDE, **extra}
+        with yt_dlp.YoutubeDL(opcoes) as ydl:
+            return ydl.extract_info(URL_VIDEO_HD, download=False)
+
+    try:
+        info = _executar_com_fallback(acao, midia="video")
+    except Exception as exc:  # noqa: BLE001
+        placar.falha(f"Resolucoes disponiveis: {type(exc).__name__}: {str(exc)[:120]}")
+        return
+
+    alturas = {}
+    for f in info.get("formats") or []:
+        if f.get("vcodec", "none") == "none" or not f.get("height"):
+            continue
+        codec = (f.get("vcodec") or "")[:4]
+        alturas[codec] = max(alturas.get(codec, 0), f["height"])
+
+    cliente = _memoria_cliente.get("video") or "padrão"
+    melhor = max(alturas.values(), default=0)
+    melhor_h264 = alturas.get("avc1", 0)
+
+    if melhor_h264 >= ALTURA_MINIMA_BOA:
+        placar.ok(f"Resolucao disponivel: H.264 ate {melhor_h264}p (cliente {cliente})")
+    elif melhor >= ALTURA_MINIMA_BOA:
+        placar.ok(
+            f"Resolucao disponivel: {melhor}p, porem sem H.264 alto "
+            f"(H.264 so ate {melhor_h264}p, cliente {cliente})"
+        )
+    else:
+        placar.falha(
+            f"So ha {melhor}p disponivel (cliente {cliente}) — video sairia borrado no "
+            f"telao. Provavel que os clientes de video tenham parado de funcionar; "
+            f"ver CLIENTES_VIDEO em core/youtube.py"
+        )
+
+
 def _testar_video(placar: _Placar) -> None:
     """Baixa um vídeo curto e confere que o resultado é MP4 com H.264 + AAC."""
     from core.metadata import gravar_tags, ler_tags
@@ -148,9 +210,16 @@ def _testar_video(placar: _Placar) -> None:
             elif "h264" in codecs and "aac" in codecs:
                 placar.ok(f"Codecs compativeis com software de DJ: {', '.join(codecs)}")
             else:
+                # Separar imagem de som ajuda a saber onde mexer: video errado e o
+                # seletor de formato; audio errado (opus!) e a ordem do format_sort.
+                falta = []
+                if "h264" not in codecs:
+                    falta.append("imagem nao e H.264")
+                if "aac" not in codecs:
+                    falta.append("som nao e AAC")
                 placar.falha(
-                    f"Codecs INCOMPATIVEIS: {', '.join(codecs) or 'nenhum'} "
-                    "(esperado h264 + aac)"
+                    f"Codecs INCOMPATIVEIS ({'; '.join(falta)}): "
+                    f"{', '.join(codecs) or 'nenhum'} — nao tocaria no software de DJ"
                 )
 
             gravar_tags(arquivo, "Artista Teste", "Titulo Teste", "Album Teste")
@@ -171,6 +240,7 @@ def executar(versao_ativa: str, foi_atualizado: bool) -> int:
     _testar_dependencias(placar)
     _testar_spotify(placar)
     _testar_musica(placar)
+    _testar_resolucao_disponivel(placar)
     _testar_video(placar)
 
     import yt_dlp

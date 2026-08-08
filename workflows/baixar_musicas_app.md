@@ -251,9 +251,28 @@ Este é o problema mais sério do projeto e provavelmente o que mais vai dar tra
 
 Evento tem telão: clipe, vídeo de abertura, retrospectiva. O botão **▶ Vídeo** cobre isso. Baixar em si é fácil (o yt-dlp já faz); o que decide se presta são quatro detalhes.
 
-**1. Formato: NÃO usar "melhor qualidade".** Sem pedir nada, o YouTube entrega VP9 ou AV1 dentro de WebM — e VirtualDJ, Serato Video e Resolume **não abrem isso**. O arquivo baixa, tem o tamanho certo, o nome certo, e só falha na hora do evento. `core/youtube.py` pede explicitamente **H.264 + AAC em MP4, até 1080p**, numa cascata de seletores que vai afrouxando; o último ramo aceita qualquer coisa, e por isso existe um `FFmpegVideoRemuxer` para MP4 como rede de segurança.
+**1. Formato: NÃO usar "melhor qualidade".** Sem pedir nada, o YouTube entrega VP9 ou AV1 dentro de WebM — e VirtualDJ, Serato Video e Resolume **não abrem isso**. O arquivo baixa, tem o tamanho certo, o nome certo, e só falha na hora do evento. `core/youtube.py` pede **H.264 + AAC em MP4, até 1080p**, com um `FFmpegVideoRemuxer` como rede de segurança.
 
 O autoteste confere isso com **ffprobe** (já empacotado): exige `h264` **e** `aac` no arquivo final. Sem essa checagem, um WebM passaria como sucesso.
+
+### O cliente decide a resolução, não o seletor (defeito da 1.3.0)
+
+**A 1.3.0 saiu entregando 360p** e o autoteste dizia "TUDO OK". Vale entender inteiro, porque é o tipo de erro que volta.
+
+O YouTube oferece **listas de formatos diferentes conforme o aparelho** que se conecta. Medido em 2026-08-08: `android` e `mweb` — justamente os únicos que passavam no bloqueio anti-bot — oferecem **só 360p**. `web_embedded` oferece H.264 até 1080p. Nenhum seletor de formato conserta isso: não dá para escolher o que não foi oferecido.
+
+Daí `CLIENTES_VIDEO` ser uma lista separada, com `web_embedded` na frente, e a memória do cliente que funcionou ser **separada por tipo de mídia** (`_memoria_cliente`). Com uma memória só, baixar uma música memorizava `android` e o vídeo seguinte saía em 360p — silenciosamente.
+
+> **`tv_embedded` não existia mais** e estava na lista desde antes, sem fazer nada. O yt-dlp renomeia/remove clientes entre versões, e um nome inválido falha em silêncio. Ao mexer aqui, conferir contra `yt_dlp.extractor.youtube._base.INNERTUBE_CLIENTS`.
+
+Duas armadilhas do seletor, ambas pegas por teste e não a olho nu:
+
+- **Pedir H.264 acima de tudo escolhia 360p em H.264 no lugar de 1080p em VP9.** Por isso `format_sort` começa por `res:` — resolução manda, codec desempata dentro dela.
+- **Sem `acodec:aac` explícito, o yt-dlp juntava imagem H.264 com som `opus`**, que a maioria dos programas de DJ não toca. O arquivo parecia perfeito.
+
+**O autoteste ganhou uma checagem que não baixa nada** (`_testar_resolucao_disponivel`): pergunta ao YouTube que resoluções o cliente de vídeo enxerga num clipe sabidamente 1080p, e reprova se só houver coisa abaixo de 720p. É o que teria pego o defeito na origem — o teste antigo baixava um vídeo de 2005 que é **240p nativo**, com teto de 480p, então aprovava qualquer coisa. **Testar resolução exige um vídeo que tenha resolução.**
+
+Toda entrega de vídeo grava no `registro.txt` a resolução obtida e o cliente usado. Sem isso, "baixou ruim" não tem como ser diagnosticado à distância.
 
 **2. Pasta separada** (`Vídeos\Roger Eventos`, chave `pasta_videos`). Serato e Rekordbox varrem a pasta de músicas para montar a biblioteca — um MP4 de 200 MB no meio dos MP3 entra como faixa e bagunça o acervo de trabalho dele. Os botões "Abrir pasta"/"Alterar pasta" agem sobre a mídia do último download, e o rodapé diz qual é.
 

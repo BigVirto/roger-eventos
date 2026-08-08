@@ -47,7 +47,7 @@ CHAVE_EXPLICACAO = "explicacao_envio_de_erros_mostrada"
 class JanelaPrincipal(ctk.CTk):
     def __init__(self) -> None:
         super().__init__()
-        self.title("Roger Eventos - Baixador de Músicas e Vídeos")
+        self.title("RE Play - Baixador de Músicas e Vídeos")
         self.geometry("820x580")
         self.minsize(720, 500)
         ctk.set_appearance_mode("dark")
@@ -65,7 +65,7 @@ class JanelaPrincipal(ctk.CTk):
 
         # Relatório de erros. Fica aqui, e não em main.py, de propósito: main.py é o
         # único arquivo congelado no .exe, e o que passa por ele só muda com instalador
-        # novo. Daqui, todo este sistema chega ao Rogério por atualização automática.
+        # novo. Daqui, todo este sistema chega ao usuário por atualização automática.
         ocorrencias.instalar_capturadores()
         ocorrencias.iniciar_envio_em_segundo_plano()
         self._explicar_envio_uma_vez()
@@ -162,11 +162,11 @@ class JanelaPrincipal(ctk.CTk):
 
         # Saída manual para o caso que nenhuma checagem automática pega: o app não
         # acusou falha, mas o resultado saiu errado (versão ao vivo, playlist pela
-        # metade). Só o Rogério percebe isso, e sem este botão ele não teria como contar.
+        # metade). Só o usuário percebe isso, e sem este botão ele não teria como contar.
         ctk.CTkButton(
-            rodape, text="📨 Avisar o Vitor", height=34, width=140,
+            rodape, text="📨 Relatar problema", height=34, width=140,
             fg_color="transparent", border_width=1,
-            command=self._avisar_vitor,
+            command=self._relatar_problema,
         ).pack(side="left", padx=(8, 0))
 
         rodape_texto = ctk.CTkFrame(self, fg_color="transparent")
@@ -181,9 +181,9 @@ class JanelaPrincipal(ctk.CTk):
         )
         self.rotulo_pasta.pack(side="left", fill="x", expand=True)
 
-        # Versão à vista: se o Rogério relatar um problema, o Vitor pergunta o número
-        # daqui e já sabe qual código está rodando. Antes isso só existia no registro.txt,
-        # que ele nunca vai abrir por conta própria.
+        # Versão à vista: se o usuário relatar um problema, quem cuida do app pergunta o
+        # número daqui e já sabe qual código está rodando. Antes isso só existia no
+        # registro.txt, que ele nunca vai abrir por conta própria.
         ctk.CTkLabel(
             rodape_texto,
             text=f"versão {VERSAO}",
@@ -217,7 +217,7 @@ class JanelaPrincipal(ctk.CTk):
             self._escrever(f"  O app foi atualizado para a versão {nova}.", "sucesso")
 
     def _explicar_envio_uma_vez(self) -> None:
-        """Conta uma vez só que os erros vão para o Vitor.
+        """Conta uma vez só que os erros são enviados automaticamente.
 
         Uma linha no log, não uma caixa com OK — mesma razão do aviso de atualização:
         caixa com OK treina o reflexo de fechar sem ler. Mas contar é obrigatório: o
@@ -227,18 +227,18 @@ class JanelaPrincipal(ctk.CTk):
             return
         definir_config(CHAVE_EXPLICACAO, True)
         self._escrever(
-            "  Quando algo dá errado, o app avisa o Vitor sozinho para ele poder "
-            "corrigir. Vai só o erro e o que você colou — nada de arquivos ou dados "
-            "pessoais."
+            "  Quando algo dá errado, o app manda um relatório sozinho para quem cuida "
+            "dele poder corrigir. Vai só o erro e o que você colou — nada de arquivos ou "
+            "dados pessoais."
         )
 
-    def _avisar_vitor(self) -> None:
+    def _relatar_problema(self) -> None:
         """Manda o que estiver na fila e, se não houver nada, abre um relato do zero."""
         if not ocorrencias.vai_avisar():
             messagebox.showinfo(
                 "Envio desligado",
                 "O envio automático de erros está desligado neste app. "
-                "Use o botão 🛟 Erros e mande o arquivo para o Vitor.",
+                "Use o botão 🛟 Erros e mande o arquivo pelo relatório manual.",
             )
             return
 
@@ -252,7 +252,7 @@ class JanelaPrincipal(ctk.CTk):
             self._fila.put(("avisado", (enviados, codigo)))
 
         threading.Thread(target=trabalhar, daemon=True).start()
-        self.rotulo_status.configure(text="Avisando o Vitor...")
+        self.rotulo_status.configure(text="Enviando relatório...")
 
     def _escolher_pasta(self) -> None:
         e_video = self._midia_atual == VIDEO
@@ -404,8 +404,8 @@ class JanelaPrincipal(ctk.CTk):
                     enviados, codigo = dado
                     if enviados:
                         marca = f" (relatório #{codigo})" if codigo else ""
-                        self._escrever(f"  Avisei o Vitor{marca}.", "sucesso")
-                        self.rotulo_status.configure(text="Pronto, o Vitor foi avisado.")
+                        self._escrever(f"  Problema relatado{marca}.", "sucesso")
+                        self.rotulo_status.configure(text="Pronto, relatório enviado.")
                     else:
                         # Sem internet o relatório não se perde: fica na fila e sai
                         # sozinho na próxima abertura.
@@ -421,13 +421,14 @@ class JanelaPrincipal(ctk.CTk):
     def _contar_que_avisou(self, excecao) -> None:
         """Diz que o erro já foi enviado, com o código do relatório.
 
-        O código é o que amarra as duas pontas: se ele mandar mensagem dizendo "deu
-        erro", o Vitor pede o código e acha o chamado exato, sem adivinhação.
+        O código é o que amarra as duas pontas: se o usuário mandar mensagem dizendo
+        "deu erro", quem mantém o app pede o código e acha o chamado exato, sem
+        adivinhação.
         """
         if not ocorrencias.vai_avisar() or not isinstance(excecao, BaseException):
             return
         self._escrever(
-            f"  Já avisei o Vitor sobre isso (relatório #{ocorrencias.codigo_do_erro(excecao)})."
+            f"  Problema já relatado (relatório #{ocorrencias.codigo_do_erro(excecao)})."
         )
 
     def _finalizar(self, resultado) -> None:
@@ -455,7 +456,7 @@ class JanelaPrincipal(ctk.CTk):
         if falhas and ocorrencias.vai_avisar():
             # Sem código aqui: uma playlist com várias falhas vira um relatório só, e
             # anunciar um código por faixa daria a impressão errada de vários chamados.
-            self._escrever("  O Vitor já foi avisado dessas falhas.")
+            self._escrever("  Essas falhas já foram relatadas.")
 
         resumo = f"Pronto! {', '.join(partes)}."
         if incertas:

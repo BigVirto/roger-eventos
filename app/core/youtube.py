@@ -6,6 +6,8 @@ from typing import Callable
 
 import yt_dlp
 
+from core import registro
+
 QUALIDADE_MP3 = "320"
 
 # Vídeo: 1080p em H.264 + AAC dentro de MP4. Não é "a melhor qualidade" de propósito —
@@ -13,14 +15,28 @@ QUALIDADE_MP3 = "320"
 # Video e Resolume não abrem esses formatos. Um arquivo que não toca no telão não serve.
 ALTURA_MAXIMA_VIDEO = 1080
 
-# Cascata: o ideal primeiro, e alternativas cada vez mais frouxas. O último ramo aceita
-# qualquer coisa — daí o remux para MP4 nos postprocessors, como rede de segurança.
+# Abaixo disto o vídeo fica visivelmente ruim num telão. Serve de piso: preferimos trocar
+# de codec a entregar 360p.
+ALTURA_MINIMA_BOA = 720
+
+# Dois ramos, e o segundo é ordenado por `format_sort` (abaixo).
+#
+# 1) o ideal, e o que acontece na prática: H.264 de 720p ao teto, com áudio AAC. Toca em
+#    qualquer software de DJ, em TV e em projetor, sem conversão nenhuma.
+# 2) quando não existe H.264 em boa resolução, vale o que houver — e aí quem decide é o
+#    format_sort, que põe resolução na frente do codec.
 _MODELO_FORMATO_VIDEO = (
-    "bestvideo[vcodec^=avc1][height<=?{h}]+bestaudio[acodec^=mp4a]/"
-    "bestvideo[vcodec^=avc1][height<=?{h}]+bestaudio/"
-    "best[ext=mp4][height<=?{h}]/"
-    "bestvideo[height<=?{h}]+bestaudio/best"
+    "bestvideo[vcodec^=avc1][height<=?{h}][height>={min}]+bestaudio[acodec^=mp4a]/"
+    "bestvideo[height<=?{h}]+bestaudio/best[height<=?{h}]/best"
 )
+
+# Ordem de desempate, do mais importante para o menos. Duas lições viraram esta linha:
+#
+# - `res` PRIMEIRO: pedir H.264 acima de tudo fazia o app escolher 360p em H.264 no lugar
+#   de 1080p em VP9. Codec certo, imagem impossível de projetar.
+# - `acodec:aac` explícito: sem isso o yt-dlp juntava vídeo H.264 com áudio **opus**, que
+#   a maioria dos programas de DJ não toca. Pego pelo autoteste, não a olho nu.
+_ORDEM_FORMATO_VIDEO = ("res:{h}", "vcodec:h264", "acodec:aac", "ext:mp4")
 
 # O YouTube bloqueia downloads não autenticados com "Sign in to confirm you're not a bot".
 # A saída recomendada pelo próprio yt-dlp é reusar os cookies de um navegador onde o
@@ -34,7 +50,20 @@ _navegador_que_funciona: str | None = None
 # (13s) enquanto tv_embedded/android_vr levavam "not a bot" e os demais falhavam.
 # Tentar vários em ordem evita depender de cookies — que no Windows moderno o yt-dlp
 # quase nunca consegue ler (banco travado com o navegador aberto, ou App-Bound Encryption).
-CLIENTES = ("android", "ios", "android_vr", "tv_embedded", "mweb", "web")
+CLIENTES = ("android", "ios", "android_vr", "web_embedded", "mweb", "web")
+
+# Para VÍDEO a ordem tem que ser outra. Medido em 2026-08-08: `android` e `mweb` — os
+# únicos que passavam no bloqueio — oferecem **só 360p**. Não é limite do seletor de
+# formato: é a lista que o YouTube entrega para aquele aparelho. `web_embedded` oferece
+# H.264 até 1080p. Sem esta lista separada, todo vídeo saía borrado no telão.
+CLIENTES_VIDEO = ("web_embedded", "tv", "web_safari", "android", "ios", "mweb", "web")
+
+# Memória do que funcionou, SEPARADA por tipo de mídia. Uma memória só era armadilha:
+# baixar uma música memorizava `android`, e o vídeo seguinte reusava esse cliente e vinha
+# em 360p sem ninguém perceber.
+_memoria_cliente: dict[str, str | None] = {"audio": None, "video": None}
+
+# Mantido para o autoteste congelado dentro do .exe 1.2.0, que importa este nome.
 _cliente_que_funciona: str | None = None
 
 # Sem limitar as tentativas, um bloqueio 429 do YouTube faz o yt-dlp repetir em silêncio
@@ -104,27 +133,39 @@ def _opcoes_cliente(cliente: str) -> dict:
     return {"extractor_args": {"youtube": {"player_client": [cliente]}}}
 
 
-def _executar_com_fallback(acao: Callable[[dict], object]) -> object:
+def _executar_com_fallback(acao: Callable[[dict], object], midia: str = "audio") -> object:
     """Roda `acao(opcoes_extra)` tentando contornar o bloqueio anti-bot do YouTube.
 
     Ordem: cliente que já funcionou → cada cliente da lista → cookies.txt → navegadores.
     Só desiste depois de tudo isso, e aí com uma mensagem em português.
+
+    `midia` escolhe a lista e a memória: vídeo precisa de clientes que ofereçam alta
+    resolução, áudio precisa dos que passam no bloqueio mais rápido.
     """
     global _cliente_que_funciona, _navegador_que_funciona
 
-    if _cliente_que_funciona:
+    clientes = CLIENTES_VIDEO if midia == "video" else CLIENTES
+    lembrado = _memoria_cliente.get(midia)
+
+    def memorizar(cliente: str | None) -> None:
+        global _cliente_que_funciona
+        _memoria_cliente[midia] = cliente
+        if midia == "audio":
+            _cliente_que_funciona = cliente  # compatibilidade com o .exe antigo
+
+    if lembrado:
         try:
-            return acao(_opcoes_cliente(_cliente_que_funciona))
+            return acao(_opcoes_cliente(lembrado))
         except Exception as exc:  # noqa: BLE001
             if not _e_bloqueio_de_bot(exc):
                 raise
-            _cliente_que_funciona = None  # o que funcionava caiu: recomeça a busca
+            memorizar(None)  # o que funcionava caiu: recomeça a busca
 
     ultimo_erro: Exception | None = None
-    for cliente in CLIENTES:
+    for cliente in clientes:
         try:
             resultado = acao(_opcoes_cliente(cliente))
-            _cliente_que_funciona = cliente
+            memorizar(cliente)
             return resultado
         except Exception as exc:  # noqa: BLE001
             if not _e_bloqueio_de_bot(exc):
@@ -255,6 +296,12 @@ def _caminho_final(ydl, info: dict, extensao: str) -> Path:
     return Path(ydl.prepare_filename(info)).with_suffix(extensao)
 
 
+def _resolucao_baixada(info: dict) -> int:
+    """Altura do fluxo de vídeo que o yt-dlp acabou escolhendo. 0 se não for vídeo."""
+    fluxos = info.get("requested_formats") or [info]
+    return max((f.get("height") or 0) for f in fluxos)
+
+
 def _baixar(
     url: str,
     pasta_destino: Path,
@@ -263,6 +310,7 @@ def _baixar(
     opcoes_da_midia: dict,
     progresso_callback: Callable[[dict], None] | None = None,
     pos_processamento_callback: Callable[[dict], None] | None = None,
+    midia: str = "audio",
 ) -> Path:
     """Base comum de `baixar_audio` e `baixar_video`: só o formato e o destino mudam."""
     pasta_destino.mkdir(parents=True, exist_ok=True)
@@ -291,9 +339,22 @@ def _baixar(
 
         with yt_dlp.YoutubeDL(opcoes) as ydl:
             info = ydl.extract_info(url, download=True)
+            if midia == "video":
+                # Registrar a resolução obtida. Foi assim que um bug passou despercebido:
+                # o app entregava 360p, o download "dava certo", e só dava para saber
+                # abrindo o arquivo. Agora fica no registro.txt de toda entrega.
+                altura = _resolucao_baixada(info)
+                cliente = _memoria_cliente.get("video") or "padrão"
+                if altura and altura < ALTURA_MINIMA_BOA:
+                    registro.aviso(
+                        f"vídeo baixado em apenas {altura}p (cliente {cliente}) — "
+                        "o YouTube não ofereceu resolução melhor para este vídeo"
+                    )
+                else:
+                    registro.info(f"vídeo baixado em {altura or '?'}p (cliente {cliente})")
             return _caminho_final(ydl, info, extensao)
 
-    return _executar_com_fallback(acao)
+    return _executar_com_fallback(acao, midia=midia)
 
 
 def baixar_audio(
@@ -352,7 +413,9 @@ def obter_titulo(url: str) -> str | None:
             return ydl.extract_info(url, download=False)
 
     try:
-        return (_executar_com_fallback(acao) or {}).get("title")
+        # midia="video" de propósito: esta consulta só existe no caminho do vídeo, e usar
+        # a lista de áudio aqui memorizaria um cliente de 360p logo antes do download.
+        return (_executar_com_fallback(acao, midia="video") or {}).get("title")
     except Exception:  # noqa: BLE001 - é um extra; sem título o download segue normal
         return None
 
@@ -372,7 +435,8 @@ def baixar_video(
         nome_arquivo,
         ".mp4",
         {
-            "format": _MODELO_FORMATO_VIDEO.format(h=altura_maxima),
+            "format": _MODELO_FORMATO_VIDEO.format(h=altura_maxima, min=ALTURA_MINIMA_BOA),
+            "format_sort": [s.format(h=altura_maxima) for s in _ORDEM_FORMATO_VIDEO],
             "merge_output_format": "mp4",
             "postprocessors": [
                 # Se o seletor tiver caído no último ramo (WebM/VP9), converte o container
@@ -387,4 +451,5 @@ def baixar_video(
         },
         progresso_callback,
         pos_processamento_callback,
+        midia="video",
     )
