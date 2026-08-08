@@ -24,6 +24,7 @@ teste automático pega isso.
 
 import io
 import json
+import os
 import shutil
 import sys
 import time
@@ -50,6 +51,15 @@ ARQUIVO_VERSAO = "versao.txt"
 # durava até a próxima verificação (6h) — o app rebaixava exatamente a mesma versão e o
 # problema voltava. Guarda só a recusada: uma versão mais nova continua sendo aceita.
 ARQUIVO_RECUSADA = "recusada.txt"
+
+# Onde main.py grava a versão do .exe antes de trocar o código. Ver versao_embutida().
+VARIAVEL_VERSAO_EXE = "ROGER_EVENTOS_VERSAO_EXE"
+
+# Nota: chegou a existir aqui uma trava que segurava atualizações de sexta a domingo,
+# para não trocar o código do app em dia de evento. Removida a pedido do Vitor em
+# 2026-08-07: o Rogério baixa as músicas com antecedência e deixa tudo programado antes
+# da festa, então não há app rodando durante o evento para proteger. A trava só atrasaria
+# correção — e a maioria delas é justamente "o YouTube mudou e parou de baixar".
 
 # Módulos exigidos para considerar a atualização utilizável. Importar todos eles pega
 # erro de sintaxe e import quebrado — as falhas mais prováveis de um pacote ruim.
@@ -87,8 +97,38 @@ def _marca_de_tempo() -> Path:
 
 
 def versao_embutida() -> str:
-    """Versão que veio dentro do .exe — não muda com atualização automática."""
-    return _VERSAO_EMBUTIDA
+    """Versão que veio dentro do .exe — não muda com atualização automática.
+
+    Lê da variável de ambiente que `main.py` grava ANTES de trocar o código. O valor de
+    `_VERSAO_EMBUTIDA` só serve de reserva: depois de uma atualização, este módulo passa
+    a ser o baixado, e aí a constante teria o número da atualização, não o do executável.
+    Era o bastante para `core/atualizador.py` achar que o .exe tinha sido reinstalado e
+    rebaixar o yt-dlp a cada atualização do app.
+    """
+    return os.environ.get(VARIAVEL_VERSAO_EXE) or _VERSAO_EMBUTIDA
+
+
+CHAVE_VERSAO_VISTA = "ultima_versao_vista"
+
+
+def versao_mudou_desde_a_ultima_vez() -> str | None:
+    """Se a versão em uso mudou desde a última abertura, devolve a nova. Marca como vista.
+
+    Por que existe: atualizar sem pedir permissão é o certo aqui — o Rogério não teria
+    como decidir, e recusar deixaria o app quebrado quando o YouTube mudasse. Mas
+    atualizar sem CONTAR é outra coisa: diante de "parou de funcionar", nem ele nem o
+    Vitor saberiam que o código mudou no meio. Avisar depois resolve isso sem transferir
+    a decisão para quem não tem base para tomá-la.
+
+    Na primeira abertura não avisa nada — não houve mudança, só não havia registro.
+    """
+    from core.organizer import definir_config, obter_config
+    from core.versao import VERSAO
+
+    anterior = obter_config(CHAVE_VERSAO_VISTA)
+    if anterior != VERSAO:
+        definir_config(CHAVE_VERSAO_VISTA, VERSAO)
+    return VERSAO if (anterior and anterior != VERSAO) else None
 
 
 def versao_baixada(pasta: Path | None = None) -> str | None:

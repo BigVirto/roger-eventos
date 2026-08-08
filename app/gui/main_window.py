@@ -13,8 +13,10 @@ from tkinter import filedialog, messagebox
 import customtkinter as ctk
 
 from core import registro
+from core.atualizador_app import versao_mudou_desde_a_ultima_vez
 from core.organizer import abrir_pasta, definir_pasta_downloads, obter_pasta_downloads
 from core.pipeline import CancelamentoSolicitado, processar_link
+from core.versao import VERSAO
 
 COR_ERRO = "#ff6b6b"
 COR_ATENCAO = "#ffd166"
@@ -35,6 +37,7 @@ class JanelaPrincipal(ctk.CTk):
         self._cancelar = threading.Event()
 
         self._montar_widgets()
+        self._avisar_se_atualizou()
         self.after(100, self._consumir_fila)
 
     # ------------------------------------------------------------------ layout
@@ -114,17 +117,42 @@ class JanelaPrincipal(ctk.CTk):
             command=self._abrir_log,
         ).pack(side="left", padx=(8, 0))
 
+        rodape_texto = ctk.CTkFrame(self, fg_color="transparent")
+        rodape_texto.pack(fill="x", padx=24, pady=(0, 14))
+
         self.rotulo_pasta = ctk.CTkLabel(
-            self,
+            rodape_texto,
             text=self._texto_pasta(),
             font=("Segoe UI", 10),
             text_color=COR_NEUTRA,
             anchor="w",
         )
-        self.rotulo_pasta.pack(fill="x", padx=24, pady=(0, 14))
+        self.rotulo_pasta.pack(side="left", fill="x", expand=True)
+
+        # Versão à vista: se o Rogério relatar um problema, o Vitor pergunta o número
+        # daqui e já sabe qual código está rodando. Antes isso só existia no registro.txt,
+        # que ele nunca vai abrir por conta própria.
+        ctk.CTkLabel(
+            rodape_texto,
+            text=f"versão {VERSAO}",
+            font=("Segoe UI", 10),
+            text_color=COR_NEUTRA,
+            anchor="e",
+        ).pack(side="right", padx=(12, 0))
 
     def _texto_pasta(self) -> str:
         return f"Salvando em: {obter_pasta_downloads()}"
+
+    def _avisar_se_atualizou(self) -> None:
+        """Conta que o app mudou de versão, sem interromper nada.
+
+        Uma linha no log em vez de uma janela de aviso: ele lê se quiser e o app segue
+        utilizável no mesmo clique. Uma caixa com OK só treinaria o reflexo de fechar
+        sem ler.
+        """
+        nova = versao_mudou_desde_a_ultima_vez()
+        if nova:
+            self._escrever(f"  O app foi atualizado para a versão {nova}.", "sucesso")
 
     def _escolher_pasta(self) -> None:
         escolhida = filedialog.askdirectory(

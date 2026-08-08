@@ -15,6 +15,7 @@ Modos de execução:
                     Saída manual para quando o código novo abre mas funciona mal.
 """
 
+import os
 import sys
 import threading
 import time
@@ -25,6 +26,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 # --- Bootstrap: precisa vir ANTES de qualquer import de core/ ou gui/ -----------------
 # É aqui que uma versão mais nova do app, baixada numa execução anterior, passa a valer.
 from core import atualizador_app  # noqa: E402
+
+# Guarda a versão do executável antes da troca. Depois dela, `core.versao` passa a ser a
+# do pacote baixado, e não haveria mais como saber o que veio dentro do .exe.
+os.environ[atualizador_app.VARIAVEL_VERSAO_EXE] = atualizador_app.versao_embutida()
 
 if "--reverter" in sys.argv:
     # recusar=True e essencial: sem isso o app rebaixaria a mesma versao em ate 6 horas

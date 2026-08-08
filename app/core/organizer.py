@@ -73,32 +73,43 @@ def pasta_downloads_padrao() -> Path:
     return _pasta_base() / NOME_PASTA_PADRAO
 
 
-def obter_pasta_downloads() -> Path:
-    """Pasta escolhida pelo usuário, ou a padrão se não houver escolha utilizável."""
+def obter_config(chave: str, padrao=None):
+    """Lê uma preferência salva. Config ilegível vale como config vazia."""
+    try:
+        return json.loads(_caminho_config().read_text(encoding="utf-8")).get(chave, padrao)
+    except (OSError, ValueError, AttributeError):
+        return padrao
+
+
+def definir_config(chave: str, valor) -> None:
+    """Salva uma preferência preservando as demais."""
     try:
         config = json.loads(_caminho_config().read_text(encoding="utf-8"))
-        escolhida = config.get("pasta_downloads")
-        if escolhida:
-            caminho = Path(escolhida)
-            # Se o destino sumiu (pendrive removido, pasta apagada), cair no padrão
-            # é melhor do que estourar erro na cara do usuário.
-            if caminho.parent.exists():
-                return caminho
-    except (OSError, ValueError, KeyError):
-        pass
+        if not isinstance(config, dict):
+            config = {}
+    except (OSError, ValueError):
+        config = {}
+    config[chave] = valor
+    _caminho_config().write_text(
+        json.dumps(config, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+
+
+def obter_pasta_downloads() -> Path:
+    """Pasta escolhida pelo usuário, ou a padrão se não houver escolha utilizável."""
+    escolhida = obter_config("pasta_downloads")
+    if escolhida:
+        caminho = Path(escolhida)
+        # Se o destino sumiu (pendrive removido, pasta apagada), cair no padrão
+        # é melhor do que estourar erro na cara do usuário.
+        if caminho.parent.exists():
+            return caminho
     return pasta_downloads_padrao()
 
 
 def definir_pasta_downloads(caminho: Path) -> None:
     """Salva a escolha do usuário para as próximas sessões."""
-    try:
-        config = json.loads(_caminho_config().read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        config = {}
-    config["pasta_downloads"] = str(caminho)
-    _caminho_config().write_text(
-        json.dumps(config, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
+    definir_config("pasta_downloads", str(caminho))
 
 
 def abrir_pasta(caminho: Path) -> None:

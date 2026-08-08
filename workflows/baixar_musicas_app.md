@@ -107,6 +107,30 @@ funciona mal — nenhuma checagem automática pega isso.
 `core/versao.py` e publicar de novo. Não adianta republicar a mesma versão corrigida —
 o número já está recusado naquela máquina, e o release seria ignorado.
 
+### Atualiza sem pedir, mas não sem contar
+
+**Não perguntamos "deseja atualizar?".** O Rogério não teria como decidir: ele não sabe
+o que mudou nem o que perde ao recusar. Uma pergunta dessas vira "sim" automático (não
+serviu para nada) ou "não" (ele fica com o app quebrado sem saber que escolheu isso). A
+maioria das atualizações conserta justamente o YouTube ter mudado — recusar é escolher
+continuar quebrado.
+
+**Mas ele é avisado depois**, de duas formas discretas:
+
+- **Versão no rodapé da janela.** Diante de um "parou de funcionar", é só perguntar o
+  número que aparece ali. Antes isso só existia no `registro.txt`, que ele nunca abriria.
+- **Uma linha no log quando a versão mudou**: *"O app foi atualizado para a versão X"*.
+  Sem botão e sem interromper — uma caixa com OK só treinaria o reflexo de fechar sem ler.
+
+O motivo mais forte é prático: sem isso, uma mudança de comportamento vira um chamado de
+suporte em que nem ele nem o Vitor sabem que o código trocou no meio.
+
+> **`versao_embutida()` lê de variável de ambiente, não da constante.** `main.py` grava
+> `ROGER_EVENTOS_VERSAO_EXE` antes de trocar o código. Sem isso, depois de uma
+> atualização o próprio `atualizador_app` passaria a ser o baixado e sua constante
+> devolveria a versão da atualização — fazendo `core/atualizador.py` concluir que o
+> `.exe` foi reinstalado e rebaixar o yt-dlp a cada atualização do app.
+
 ## Entregar ao Rogério: o instalador
 
 O que se manda para ele é **`instalador/Saida/Instalar-RogerEventos-BaixadorDeMusicas.exe`** (~142 MB). Ele executa, clica em Avançar e ganha atalho na Área de Trabalho e no Menu Iniciar.
@@ -237,5 +261,6 @@ Resolve bem o caso real (repetir uma playlist não rebaixa nada). Uma detecção
 
 - 2026-08-06: avaliado spotDL e a API oficial do Spotify; ambos descartados pelos motivos acima. Caminho escolhido: leitura da página pública, sem credencial.
 - 2026-08-07: atualização automática do app. Avaliado baixar o `.exe` inteiro (~142 MB) e descartado: pesado e, no Windows, um programa não consegue se sobrescrever enquanto está aberto — exigiria um processo auxiliar, mais peça para quebrar. Trocar só `core/` e `gui/` resolve a grande maioria dos casos com 26 KB.
+- 2026-08-07: avaliada uma trava que seguraria atualizações de sexta a domingo, para não trocar o código do app em dia de evento. **Descartada pelo Vitor:** o Rogério baixa as músicas com antecedência e deixa tudo programado antes da festa, então não há app rodando durante o evento para proteger. A trava só atrasaria correção. *Registrado aqui porque a ideia parece boa até se saber como ele trabalha de verdade.*
 - 2026-08-07: repositório **público** por decisão do Vitor. Privado exigiria uma chave dentro do `.exe`, que é extraível (ou seja, protege pouco) e **vence com o tempo** — quando vencesse, as atualizações parariam em silêncio. O app não guarda credencial nem dado do Rogério, então não havia o que proteger.
 - Ajustar a tolerância de duração em `core/matcher.py` (hoje ±5s) se aparecerem muitos falsos "incerto" ou muitas versões erradas na prática.

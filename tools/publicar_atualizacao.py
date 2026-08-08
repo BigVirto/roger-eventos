@@ -104,7 +104,9 @@ def publicar(versao: str, caminho_zip: Path) -> None:
     resultado = subprocess.run(comando, cwd=RAIZ)
     if resultado.returncode != 0:
         raise SystemExit("Falhou ao publicar. Confira 'gh auth status'.")
-    print(f"[OK]    release v{versao} publicado. O app do Rogerio pega em ate 6 horas.")
+
+    print(f"[OK]    release v{versao} publicado.")
+    print("        O app do Rogerio pega em ate 6h e aplica na abertura seguinte.")
 
 
 if __name__ == "__main__":
