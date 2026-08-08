@@ -1,7 +1,11 @@
-"""Janela principal: um campo de link, progresso claro e acesso à pasta de destino.
+"""Janela principal: um campo de link, dois botões e acesso às pastas de destino.
 
 A GUI não contém lógica de download/busca — só orquestração visual. Todo o trabalho
 acontece em core/pipeline.py, numa thread separada para a janela nunca travar.
+
+Música e vídeo são dois BOTÕES, não um seletor de modo. A escolha acontece no clique e
+não fica ligada: um seletor esquecido em "vídeo" transformaria a próxima playlist de
+500 MB numa de 7 GB sem ele perceber.
 """
 
 import queue
@@ -12,10 +16,24 @@ from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
 
-from core import registro
+from core import ocorrencias, registro
 from core.atualizador_app import versao_mudou_desde_a_ultima_vez
-from core.organizer import abrir_pasta, definir_pasta_downloads, obter_pasta_downloads
-from core.pipeline import CancelamentoSolicitado, processar_link
+from core.organizer import (
+    abrir_pasta,
+    definir_config,
+    definir_pasta_downloads,
+    definir_pasta_videos,
+    obter_config,
+    obter_pasta_downloads,
+    obter_pasta_videos,
+)
+from core.pipeline import (
+    MUSICA,
+    VIDEO,
+    CancelamentoSolicitado,
+    EspacoInsuficiente,
+    processar_link,
+)
 from core.versao import VERSAO
 
 COR_ERRO = "#ff6b6b"
@@ -23,21 +41,35 @@ COR_ATENCAO = "#ffd166"
 COR_SUCESSO = "#7bd88f"
 COR_NEUTRA = "#9aa0a6"
 
+CHAVE_EXPLICACAO = "explicacao_envio_de_erros_mostrada"
+
 
 class JanelaPrincipal(ctk.CTk):
     def __init__(self) -> None:
         super().__init__()
-        self.title("Roger Eventos - Baixador de Músicas")
-        self.geometry("720x560")
-        self.minsize(640, 480)
+        self.title("Roger Eventos - Baixador de Músicas e Vídeos")
+        self.geometry("820x580")
+        self.minsize(720, 500)
         ctk.set_appearance_mode("dark")
 
         self._fila: queue.Queue[tuple[str, object]] = queue.Queue()
         self._baixando = False
         self._cancelar = threading.Event()
+        # Sobre qual pasta o rodapé age. Acompanha o último download, para "Abrir pasta"
+        # e "Alterar pasta" fazerem o que ele espera sem precisar de botões duplicados
+        # num rodapé que já tem quatro.
+        self._midia_atual = MUSICA
 
         self._montar_widgets()
         self._avisar_se_atualizou()
+
+        # Relatório de erros. Fica aqui, e não em main.py, de propósito: main.py é o
+        # único arquivo congelado no .exe, e o que passa por ele só muda com instalador
+        # novo. Daqui, todo este sistema chega ao Rogério por atualização automática.
+        ocorrencias.instalar_capturadores()
+        ocorrencias.iniciar_envio_em_segundo_plano()
+        self._explicar_envio_uma_vez()
+
         self.after(100, self._consumir_fila)
 
     # ------------------------------------------------------------------ layout
@@ -45,13 +77,14 @@ class JanelaPrincipal(ctk.CTk):
     def _montar_widgets(self) -> None:
         ctk.CTkLabel(
             self,
-            text="Cole o link da música ou playlist",
+            text="Cole o link da música ou do vídeo",
             font=("Segoe UI", 18, "bold"),
         ).pack(pady=(22, 2), padx=24, anchor="w")
 
         ctk.CTkLabel(
             self,
-            text="Funciona com YouTube e Spotify. Também aceita o nome da música.",
+            text="Funciona com YouTube e Spotify. Também aceita o nome da música. "
+                 "Escolha no botão: só a música (MP3) ou o vídeo inteiro (MP4).",
             font=("Segoe UI", 12),
             text_color=COR_NEUTRA,
         ).pack(pady=(0, 12), padx=24, anchor="w")
@@ -63,14 +96,24 @@ class JanelaPrincipal(ctk.CTk):
             linha, placeholder_text="https://...", font=("Segoe UI", 13)
         )
         self.campo_link.pack(side="left", fill="x", expand=True, ipady=8)
-        self.campo_link.bind("<Return>", lambda _e: self._iniciar())
+        # Enter continua baixando música: é o uso do dia a dia dele, vídeo é a exceção.
+        self.campo_link.bind("<Return>", lambda _e: self._iniciar(MUSICA))
         self.campo_link.focus()
 
         self.botao = ctk.CTkButton(
-            linha, text="Baixar", width=120, height=40, font=("Segoe UI", 13, "bold"),
-            command=self._iniciar,
+            linha, text="♪ Música", width=120, height=40, font=("Segoe UI", 13, "bold"),
+            command=lambda: self._iniciar(MUSICA),
         )
         self.botao.pack(side="left", padx=(10, 0))
+
+        # Cor diferente para não clicar num pensando no outro: um erro aqui custa
+        # 200 MB e alguns minutos, não um arquivo de 8 MB.
+        self.botao_video = ctk.CTkButton(
+            linha, text="▶ Vídeo", width=110, height=40, font=("Segoe UI", 13, "bold"),
+            fg_color="#3a6ea5", hover_color="#4880bd",
+            command=lambda: self._iniciar(VIDEO),
+        )
+        self.botao_video.pack(side="left", padx=(8, 0))
 
         # Só aparece durante o download: sem isso, fechar a janela no meio de uma
         # playlist era a única saída, e deixava arquivos pela metade.
@@ -101,7 +144,7 @@ class JanelaPrincipal(ctk.CTk):
 
         ctk.CTkButton(
             rodape, text="📂 Abrir pasta", height=34, width=120,
-            command=lambda: abrir_pasta(obter_pasta_downloads()),
+            command=lambda: abrir_pasta(self._pasta_atual()),
         ).pack(side="left")
 
         ctk.CTkButton(
@@ -110,11 +153,20 @@ class JanelaPrincipal(ctk.CTk):
             command=self._escolher_pasta,
         ).pack(side="left", padx=(8, 0))
 
-        # Se der problema na máquina do Rogério, ele abre isto e manda o arquivo.
+        # O relatório completo, para quem quiser ver o que aconteceu.
         ctk.CTkButton(
             rodape, text="🛟 Erros", height=34, width=80,
             fg_color="transparent", border_width=1,
             command=self._abrir_log,
+        ).pack(side="left", padx=(8, 0))
+
+        # Saída manual para o caso que nenhuma checagem automática pega: o app não
+        # acusou falha, mas o resultado saiu errado (versão ao vivo, playlist pela
+        # metade). Só o Rogério percebe isso, e sem este botão ele não teria como contar.
+        ctk.CTkButton(
+            rodape, text="📨 Avisar o Vitor", height=34, width=140,
+            fg_color="transparent", border_width=1,
+            command=self._avisar_vitor,
         ).pack(side="left", padx=(8, 0))
 
         rodape_texto = ctk.CTkFrame(self, fg_color="transparent")
@@ -140,8 +192,18 @@ class JanelaPrincipal(ctk.CTk):
             anchor="e",
         ).pack(side="right", padx=(12, 0))
 
+    def _pasta_atual(self) -> Path:
+        """Pasta da mídia do último download — é sobre ela que o rodapé age."""
+        return obter_pasta_videos() if self._midia_atual == VIDEO else obter_pasta_downloads()
+
     def _texto_pasta(self) -> str:
-        return f"Salvando em: {obter_pasta_downloads()}"
+        # Diz qual é a mídia, senão o rodapé mudaria de pasta sozinho sem explicação.
+        tipo = "vídeos" if self._midia_atual == VIDEO else "músicas"
+        return f"Salvando {tipo} em: {self._pasta_atual()}"
+
+    def _definir_midia_atual(self, midia: str) -> None:
+        self._midia_atual = midia
+        self.rotulo_pasta.configure(text=self._texto_pasta())
 
     def _avisar_se_atualizou(self) -> None:
         """Conta que o app mudou de versão, sem interromper nada.
@@ -154,10 +216,50 @@ class JanelaPrincipal(ctk.CTk):
         if nova:
             self._escrever(f"  O app foi atualizado para a versão {nova}.", "sucesso")
 
+    def _explicar_envio_uma_vez(self) -> None:
+        """Conta uma vez só que os erros vão para o Vitor.
+
+        Uma linha no log, não uma caixa com OK — mesma razão do aviso de atualização:
+        caixa com OK treina o reflexo de fechar sem ler. Mas contar é obrigatório: o
+        app manda coisas da máquina dele, e ele tem que saber disso e como desligar.
+        """
+        if not ocorrencias.vai_avisar() or obter_config(CHAVE_EXPLICACAO):
+            return
+        definir_config(CHAVE_EXPLICACAO, True)
+        self._escrever(
+            "  Quando algo dá errado, o app avisa o Vitor sozinho para ele poder "
+            "corrigir. Vai só o erro e o que você colou — nada de arquivos ou dados "
+            "pessoais."
+        )
+
+    def _avisar_vitor(self) -> None:
+        """Manda o que estiver na fila e, se não houver nada, abre um relato do zero."""
+        if not ocorrencias.vai_avisar():
+            messagebox.showinfo(
+                "Envio desligado",
+                "O envio automático de erros está desligado neste app. "
+                "Use o botão 🛟 Erros e mande o arquivo para o Vitor.",
+            )
+            return
+
+        codigo = None
+        if not ocorrencias.ha_pendentes():
+            codigo = ocorrencias.relatar_manualmente()
+
+        # Rede na thread da janela travaria a interface; o retorno vem pela fila.
+        def trabalhar() -> None:
+            enviados = ocorrencias.enviar_agora()
+            self._fila.put(("avisado", (enviados, codigo)))
+
+        threading.Thread(target=trabalhar, daemon=True).start()
+        self.rotulo_status.configure(text="Avisando o Vitor...")
+
     def _escolher_pasta(self) -> None:
+        e_video = self._midia_atual == VIDEO
+        tipo = "os vídeos" if e_video else "as músicas"
         escolhida = filedialog.askdirectory(
-            title="Escolha onde salvar as músicas",
-            initialdir=str(obter_pasta_downloads().parent),
+            title=f"Escolha onde salvar {tipo}",
+            initialdir=str(self._pasta_atual().parent),
         )
         if not escolhida:  # usuário fechou o seletor
             return
@@ -178,10 +280,13 @@ class JanelaPrincipal(ctk.CTk):
             )
             return
 
-        definir_pasta_downloads(destino)
+        if e_video:
+            definir_pasta_videos(destino)
+        else:
+            definir_pasta_downloads(destino)
         self.rotulo_pasta.configure(text=self._texto_pasta())
-        self._escrever(f"  Pasta alterada para: {destino}")
-        registro.info(f"pasta de downloads alterada para: {destino}")
+        self._escrever(f"  Pasta de {'vídeos' if e_video else 'músicas'} alterada para: {destino}")
+        registro.info(f"pasta de {'vídeos' if e_video else 'músicas'} alterada para: {destino}")
 
     def _abrir_log(self) -> None:
         caminho = registro.caminho_log()
@@ -201,7 +306,7 @@ class JanelaPrincipal(ctk.CTk):
         self.log.see("end")
         self.log.configure(state="disabled")
 
-    def _iniciar(self) -> None:
+    def _iniciar(self, midia: str = MUSICA) -> None:
         if self._baixando:
             return
         texto = self.campo_link.get().strip()
@@ -209,22 +314,36 @@ class JanelaPrincipal(ctk.CTk):
             self.rotulo_status.configure(text="Cole um link ou o nome de uma música primeiro.")
             return
 
+        e_video = midia == VIDEO
         self._baixando = True
         self._cancelar.clear()
-        self.botao.configure(state="disabled", text="Baixando...")
+        self._definir_midia_atual(midia)
+        # Os dois travam: o que foi clicado explica o que está acontecendo, o outro só
+        # não pode aceitar clique no meio de um download.
+        self.botao.configure(
+            state="disabled", text="Aguarde..." if e_video else "Baixando..."
+        )
+        self.botao_video.configure(
+            state="disabled", text="Baixando..." if e_video else "Aguarde..."
+        )
         self.botao_cancelar.pack(side="left", padx=(8, 0))
         self.barra.set(0)
         self.rotulo_status.configure(text="Consultando... isso pode levar alguns segundos.")
-        self._escrever(f"\n▶ {texto}")
+        self._escrever(f"\n▶ {texto}   [{'vídeo' if e_video else 'música'}]")
 
-        threading.Thread(target=self._trabalhar, args=(texto,), daemon=True).start()
+        # Se der erro, o relatório precisa dizer o que ele estava tentando baixar —
+        # "falhou ao baixar" sem saber se era playlist do Spotify ou vídeo solto
+        # rende pouco na hora de corrigir.
+        ocorrencias.definir_pedido_atual(f"[{midia}] {texto}")
+
+        threading.Thread(target=self._trabalhar, args=(texto, midia), daemon=True).start()
 
     def _cancelar_download(self) -> None:
         self._cancelar.set()
         self.botao_cancelar.configure(state="disabled", text="Parando...")
         self.rotulo_status.configure(text="Parando após a etapa atual...")
 
-    def _trabalhar(self, texto: str) -> None:
+    def _trabalhar(self, texto: str, midia: str = MUSICA) -> None:
         """Roda fora da thread da UI: só publica eventos na fila."""
         try:
             resultado = processar_link(
@@ -232,10 +351,16 @@ class JanelaPrincipal(ctk.CTk):
                 progresso_callback=lambda m: self._fila.put(("status", m)),
                 percentual_callback=lambda p: self._fila.put(("percentual", p)),
                 cancelar=self._cancelar,
+                midia=midia,
             )
             self._fila.put(("fim", resultado))
         except CancelamentoSolicitado:
             self._fila.put(("cancelado", None))
+        except EspacoInsuficiente as exc:
+            # Condição da máquina, não defeito do app: não passa por registro.erro para
+            # não virar chamado automático sobre algo que só ele pode resolver.
+            registro.aviso(f"espaço insuficiente: {exc}")
+            self._fila.put(("sem_espaco", exc))
         except Exception as exc:  # noqa: BLE001 - vira mensagem na tela, nunca crash
             registro.erro("erro inesperado ao processar o pedido", exc)
             self._fila.put(("erro_geral", exc))
@@ -261,15 +386,49 @@ class JanelaPrincipal(ctk.CTk):
                     self.barra.set(0)
                     self._destravar()
 
+                elif tipo == "sem_espaco":
+                    self._escrever(f"  {dado}", "atencao")
+                    self.rotulo_status.configure(text="Sem espaço no disco. Nada foi baixado.")
+                    self.barra.set(0)
+                    self._destravar()
+
                 elif tipo == "erro_geral":
                     self._escrever(f"  ERRO: {dado}", "erro")
+                    self._contar_que_avisou(dado)
                     self.rotulo_status.configure(
                         text="Não deu certo. Veja o relatório de erros para detalhes."
                     )
                     self._destravar()
+
+                elif tipo == "avisado":
+                    enviados, codigo = dado
+                    if enviados:
+                        marca = f" (relatório #{codigo})" if codigo else ""
+                        self._escrever(f"  Avisei o Vitor{marca}.", "sucesso")
+                        self.rotulo_status.configure(text="Pronto, o Vitor foi avisado.")
+                    else:
+                        # Sem internet o relatório não se perde: fica na fila e sai
+                        # sozinho na próxima abertura.
+                        self._escrever(
+                            "  Não consegui avisar agora (sem internet?). "
+                            "Vou tentar de novo sozinho.", "atencao"
+                        )
+                        self.rotulo_status.configure(text="Aviso guardado para tentar de novo.")
         except queue.Empty:
             pass
         self.after(100, self._consumir_fila)
+
+    def _contar_que_avisou(self, excecao) -> None:
+        """Diz que o erro já foi enviado, com o código do relatório.
+
+        O código é o que amarra as duas pontas: se ele mandar mensagem dizendo "deu
+        erro", o Vitor pede o código e acha o chamado exato, sem adivinhação.
+        """
+        if not ocorrencias.vai_avisar() or not isinstance(excecao, BaseException):
+            return
+        self._escrever(
+            f"  Já avisei o Vitor sobre isso (relatório #{ocorrencias.codigo_do_erro(excecao)})."
+        )
 
     def _finalizar(self, resultado) -> None:
         total = len(resultado.faixas)
@@ -278,8 +437,9 @@ class JanelaPrincipal(ctk.CTk):
         pulados = resultado.pulados
         baixados = resultado.baixados
 
+        e_video = self._midia_atual == VIDEO
         self.barra.set(1)
-        partes = [f"{len(baixados)} baixada(s)"]
+        partes = [f"{len(baixados)} {'vídeo(s)' if e_video else 'baixada(s)'}"]
         if pulados:
             partes.append(f"{len(pulados)} já tinha")
         if falhas:
@@ -289,7 +449,13 @@ class JanelaPrincipal(ctk.CTk):
         for f in falhas:
             self._escrever(f"  ✗ {f.nome} — {f.erro}", "erro")
         for i in incertas:
-            self._escrever(f"  ⚠ confira esta: {i.nome}", "atencao")
+            aviso = "pode ser só o áudio, sem imagem" if e_video else "confira esta"
+            self._escrever(f"  ⚠ {aviso}: {i.nome}", "atencao")
+
+        if falhas and ocorrencias.vai_avisar():
+            # Sem código aqui: uma playlist com várias falhas vira um relatório só, e
+            # anunciar um código por faixa daria a impressão errada de vários chamados.
+            self._escrever("  O Vitor já foi avisado dessas falhas.")
 
         resumo = f"Pronto! {', '.join(partes)}."
         if incertas:
@@ -298,7 +464,8 @@ class JanelaPrincipal(ctk.CTk):
         self._destravar()
 
     def _destravar(self) -> None:
-        self.botao.configure(state="normal", text="Baixar")
+        self.botao.configure(state="normal", text="♪ Música")
+        self.botao_video.configure(state="normal", text="▶ Vídeo")
         self.botao_cancelar.pack_forget()
         self.botao_cancelar.configure(state="normal", text="Cancelar")
         self.campo_link.delete(0, "end")

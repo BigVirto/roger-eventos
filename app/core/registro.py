@@ -1,7 +1,10 @@
 """Arquivo de log ao lado do .exe, para diagnosticar problemas na máquina do Rogério.
 
 Sem isto, quando algo falha na casa dele a única fonte é o relato verbal. Com o arquivo,
-ele manda `registro.txt` e dá para ver exatamente qual faixa falhou e por quê.
+dá para ver exatamente qual faixa falhou e por quê.
+
+Desde 2026-08-08 ele não depende mais de o Rogério mandar o arquivo: tudo que passa por
+`erro()` também vira um relatório enviado sozinho ao Vitor — ver `core/ocorrencias.py`.
 
 Escreve em português e sem jargão onde der: quem lê primeiro é o Vitor, mas o Rogério
 pode abrir o arquivo e entender o que aconteceu.
@@ -53,7 +56,27 @@ def obter() -> logging.Logger:
         # continua funcionando, só fica sem registro.
         _logger.addHandler(logging.NullHandler())
 
+    _pendurar_relator(_logger)
     return _logger
+
+
+def _pendurar_relator(logger: logging.Logger) -> None:
+    """Faz todo `erro()` daqui virar também um relatório enviado ao Vitor.
+
+    Pendurar no logger em vez de chamar o relator em cada ponto de falha: as chamadas a
+    `erro()` já existem espalhadas por `pipeline.py`, `youtube.py` e pela janela, e as
+    que forem escritas no futuro entram cobertas sem ninguém lembrar de nada.
+
+    Só ERROR sobe — `info()` e `aviso()` ficam abaixo do nível do manipulador. É o que
+    permite ao próprio relator usar `aviso()` para contar que falhou em enviar sem se
+    reportar em círculo.
+    """
+    try:
+        from core.ocorrencias import ManipuladorDeOcorrencias
+
+        logger.addHandler(ManipuladorDeOcorrencias())
+    except Exception:  # noqa: BLE001 - sem relator o app segue igual, só sem avisar
+        pass
 
 
 def info(mensagem: str) -> None:

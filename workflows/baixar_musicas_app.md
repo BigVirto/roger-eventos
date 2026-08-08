@@ -1,31 +1,33 @@
-# Workflow: Baixador de Músicas (Roger Eventos)
+# Workflow: Baixador de Músicas e Vídeos (Roger Eventos)
 
 ## Objetivo
 
-App desktop para o Rogério baixar músicas (individuais ou playlists) do YouTube e Spotify sem sites cheios de propaganda. Interface de um campo único: cola o link (ou o nome da música) e clica em Baixar.
+App desktop para o Rogério baixar músicas e vídeos (individuais ou playlists) do YouTube e Spotify sem sites cheios de propaganda. Interface de um campo único e **dois botões**: cola o link (ou o nome da música) e escolhe **♪ Música** (MP3) ou **▶ Vídeo** (MP4).
 
 ## Onde está
 
 - Código: `app/` (`main.py`, `gui/`, `core/`)
 - Repositório: **github.com/BigVirto/roger-eventos** (público) — também é de onde o app baixa suas próprias atualizações
 - Downloads: `downloads/<nome da playlist/evento>/` (playlists e álbuns) ou direto em `downloads/` (faixa avulsa)
-- Na máquina do Rogério: programa em `%LOCALAPPDATA%\Programs\RogerEventos`, dados (config, log, atualizações) em `%LOCALAPPDATA%\RogerEventos`, músicas em `Músicas\Roger Eventos`
+- Na máquina do Rogério: programa em `%LOCALAPPDATA%\Programs\RogerEventos`, dados (config, log, atualizações) em `%LOCALAPPDATA%\RogerEventos`, músicas em `Músicas\Roger Eventos` e **vídeos em `Vídeos\Roger Eventos`**
 
-## Como funciona (fluxo de um campo só)
+## Como funciona (um campo, dois botões)
 
-O app detecta sozinho o que foi colado — não há abas nem modos a escolher:
+O app detecta sozinho **de onde** veio o link; quem decide **o que sai** é o botão:
 
-| Colou | O que acontece |
-|---|---|
-| Playlist/álbum do Spotify | Lê a lista pela página pública, busca cada faixa no YouTube e baixa |
-| Faixa do Spotify | Mesma coisa, uma faixa só |
-| Playlist do YouTube | Baixa todos os vídeos direto |
-| Vídeo do YouTube | Baixa só ele |
-| Nome de música (sem link) | Busca no YouTube e baixa o primeiro resultado |
+| Colou | ♪ Música | ▶ Vídeo |
+|---|---|---|
+| Playlist/álbum do Spotify | Lê a lista pela página pública, busca cada faixa no YouTube e baixa em MP3 | Busca o **clipe** de cada faixa e baixa em MP4 |
+| Faixa do Spotify | Mesma coisa, uma faixa só | O clipe daquela faixa |
+| Playlist do YouTube | Baixa o áudio de todos | Baixa os vídeos completos |
+| Vídeo do YouTube | Só o áudio | O vídeo inteiro |
+| Nome de música (sem link) | Busca e baixa o áudio do primeiro resultado | Busca e baixa o vídeo |
+
+**Por que dois botões e não um seletor de modo:** a escolha acontece no clique e não fica ligada. Um seletor esquecido em "vídeo" transformaria a próxima playlist de 500 MB numa de 7 GB sem ele perceber. O `<Enter>` no campo continua sendo música — é o uso do dia a dia.
 
 Para tudo que vem do Spotify, a escolha do vídeo no YouTube usa a **duração da faixa original como critério** (`core/matcher.py`, tolerância ±5s) — é isso que evita baixar videoclipe, versão ao vivo ou remix no lugar do áudio de estúdio. Faixas cuja melhor correspondência ficou fora da tolerância aparecem no log como "ATENÇÃO (confira essa)" ao final, sem interromper o resto.
 
-Tudo sai em **MP3 320kbps**, o padrão usado por DJs em festas (qualidade alta com arquivo pequeno).
+Música sai em **MP3 320kbps**, o padrão usado por DJs em festas (qualidade alta com arquivo pequeno). Vídeo sai em **MP4 1080p com H.264 + AAC** — ver a seção "Vídeo" para o porquê de *não* ser "a melhor qualidade disponível".
 
 ## Decisões técnicas importantes (e por quê)
 
@@ -245,6 +247,32 @@ Este é o problema mais sério do projeto e provavelmente o que mais vai dar tra
 
 **Cuidado ao testar:** rodar muitos downloads seguidos do mesmo IP ativa o 429 e contamina qualquer medição de velocidade. Se os tempos parecerem absurdos, verifique o bloqueio antes de otimizar o código.
 
+## Vídeo (MP4) — adicionado em 1.3.0
+
+Evento tem telão: clipe, vídeo de abertura, retrospectiva. O botão **▶ Vídeo** cobre isso. Baixar em si é fácil (o yt-dlp já faz); o que decide se presta são quatro detalhes.
+
+**1. Formato: NÃO usar "melhor qualidade".** Sem pedir nada, o YouTube entrega VP9 ou AV1 dentro de WebM — e VirtualDJ, Serato Video e Resolume **não abrem isso**. O arquivo baixa, tem o tamanho certo, o nome certo, e só falha na hora do evento. `core/youtube.py` pede explicitamente **H.264 + AAC em MP4, até 1080p**, numa cascata de seletores que vai afrouxando; o último ramo aceita qualquer coisa, e por isso existe um `FFmpegVideoRemuxer` para MP4 como rede de segurança.
+
+O autoteste confere isso com **ffprobe** (já empacotado): exige `h264` **e** `aac` no arquivo final. Sem essa checagem, um WebM passaria como sucesso.
+
+**2. Pasta separada** (`Vídeos\Roger Eventos`, chave `pasta_videos`). Serato e Rekordbox varrem a pasta de músicas para montar a biblioteca — um MP4 de 200 MB no meio dos MP3 entra como faixa e bagunça o acervo de trabalho dele. Os botões "Abrir pasta"/"Alterar pasta" agem sobre a mídia do último download, e o rodapé diz qual é.
+
+**3. Clipe, não áudio com imagem parada** (`matcher.escolher_melhor_clipe`). Buscar por duração pura — o que serve perfeitamente para música — traz os canais "- Topic", que são **capa estática**: ótimos como MP3, inúteis no telão. Para vídeo a tolerância sobe para ±30s (clipe tem intro e créditos, quase sempre dura mais que a faixa) e, dentro dela, clipe declarado ganha de upload comum, que ganha de áudio parado. Só sobrou áudio parado? Baixa e marca como "confira" — não falha.
+
+**4. Tamanho.** MP3 tem ~10 MB, clipe em 1080p tem ~150 MB; uma playlist de 50 vira ~7 GB. Antes de começar uma playlist de vídeo o app estima (~25 MB/minuto), mostra o total e o espaço livre, e **se não couber, falha antes** em vez de encher o disco no meio.
+
+> **Duas armadilhas que o vídeo trouxe** — as duas foram corrigidas, mas ambas são fáceis de reintroduzir:
+>
+> **`_limpar_parciais` apagava o arquivo pronto.** Ela preserva o arquivo final e apaga todo o resto; com `.mp3` cravado, um MP4 completo caía no "resto" e sumia — justamente ao cancelar ou ao repetir um download. Agora recebe a extensão da mídia em curso. **Nunca voltar a fixar a extensão nessa função.**
+>
+> **A barra de progresso andava para trás.** Vídeo baixa dois fluxos (imagem e som) e cada um dispara o hook de 0 a 100%. `_Progresso` guarda a fração **por arquivo** e divide pelo número de partes (`partes_por_item`: 1 para música, 2 para vídeo). Juntar imagem e som depois leva segundos com a barra em 100% — daí o `postprocessor_hooks` avisando "juntando imagem e som...".
+
+**Link avulso de vídeo consulta o título antes de baixar** (`youtube.obter_titulo`, ~2s). Sem saber o nome do arquivo antes, o app não tem como responder duas perguntas: *já está na pasta?* e *o que apagar se ele cancelar?* Descoberto testando: sem essa consulta, colar o mesmo link duas vezes rebaixava os 200 MB, e cancelar no meio deixava `.part` e `.webp` para trás.
+
+> **Isso vale só para vídeo.** Para música o download inteiro leva ~10s e os 2s não se pagariam; além disso, o caminho da música nomeia pelo `%(title)s` do yt-dlp desde sempre, e trocar o esquema de nome faria o Rogério rebaixar a biblioteca que já tem. **Não estender essa consulta à música sem resolver o nome legado.**
+
+**Onde tudo isso vive:** `PerfilMidia` em `core/pipeline.py` concentra o que muda entre música e vídeo (extensão, pasta, função de download, critério de escolha, número de fluxos). Preferir estender o perfil a espalhar `if é vídeo` pelo arquivo.
+
 ## Robustez (fase 2)
 
 **Metadados ID3 + capa** (`core/metadata.py`): sem tags, Serato/Rekordbox/VirtualDJ mostram a biblioteca desorganizada — eles leem as tags, não o nome do arquivo. Faixas do YouTube recebem tags via pós-processadores do yt-dlp (`FFmpegMetadata` + `EmbedThumbnail`). Faixas do Spotify são **sobrescritas depois** com `mutagen` usando os dados exatos do Spotify, porque o título do vídeo do YouTube vem sujo ("... (Official Video) [HD] 4K"). O campo `album` recebe o nome da playlist/evento, agrupando o set no software de DJ. `mutagen` já vem junto por ser dependência do yt-dlp.
@@ -292,12 +320,70 @@ rodando, já que o `.exe` e o código podem estar em versões diferentes.
 
 Resolve bem o caso real (repetir uma playlist não rebaixa nada). Uma detecção de duplicatas de verdade exigiria normalizar acentos/maiúsculas ou usar o ID do vídeo como identidade — só fazer se incomodar na prática.
 
+## Relatório automático de erros (chega no GitHub sozinho)
+
+Desde 2026-08-08, um erro na máquina do Rogério não fica mais preso lá. O caminho:
+
+```
+app (core/ocorrencias.py)  ──▶  Apps Script (Google, a "caixa de correio")  ──▶  Issue no GitHub
+```
+
+**Como o erro é capturado**: `core/ocorrencias.py` pendura um `logging.Handler` no
+mesmo logger que `core/registro.py` já usa (`_pendurar_relator` em `registro.py`). Todo
+`registro.erro()` que já existe em `pipeline.py`/`youtube.py`/`main_window.py` — e
+qualquer um escrito no futuro — vira ocorrência **sem precisar alterar esses arquivos**.
+`sys.excepthook` e `threading.excepthook` cobrem o que estoura fora de qualquer `try`.
+
+**Por que não fala direto com o GitHub**: criar Issue exige uma chave, e chave dentro do
+`.exe` é extraível (repositório público) e **vence com o tempo** — quando vencesse, o
+envio morreria em silêncio, exatamente o que este sistema existe para evitar. Por isso o
+app só deposita a ficha num endereço que **só recebe** (`URL_RECEPTOR` em
+`ocorrencias.py`, vazio até ser configurado); a chave mora do lado do Vitor, nunca no
+app. Ver o cabeçalho de `tools/receptor_erros.gs` para instalar o Apps Script (uma vez
+só: colar o script, guardar `GITHUB_TOKEN`/`GITHUB_REPO` em Script Properties, implantar
+como Web App, colar a URL gerada em `ocorrencias.py` e publicar uma atualização).
+
+**Agrupamento**: cada ficha carrega uma impressão digital (tipo do erro + últimos passos
+do traceback por arquivo/função, sem número de linha). O receptor procura Issue aberta
+com esse rótulo antes de criar uma nova — é o que faz uma playlist com 50 falhas iguais
+virar **um** chamado dizendo "50x", em vez de 50 chamados que ninguém vai ler.
+`tools/ver_erros.py` lista ordenado por quantas vezes aconteceu.
+
+**Mascaramento**: `_mascarar()` troca `C:\Users\<nome>\...` por `~` em tudo que sai —
+é a única informação pessoal que passaria pelo traceback ou pelo caminho de download.
+
+**Nunca atrasa nem derruba o app**: o envio roda em thread daemon (mesmo padrão das
+duas threads de atualização) e toda função de `ocorrencias.py` engole exceção. Sem
+internet, a ficha fica em `pasta_dados()/ocorrencias/*.json` e sai na próxima abertura.
+Teto de 20 envios/dia e 50 arquivos na fila, para um defeito em laço não virar enxurrada.
+
+**O que o Rogério vê**: uma linha explicando o envio na primeira abertura, e depois
+*"Já avisei o Vitor sobre isso (relatório #a3f9c1)"* quando algo falha. O botão
+"📨 Avisar o Vitor" manda a fila na hora ou abre um relato manual — a saída para quando
+o app não acusou erro nenhum mas o resultado saiu errado (ninguém automatiza isso).
+Desligar: `enviar_erros: false` em `configuracao.json`.
+
+**Testar sem gerar `.exe`**: `python tools/testar_envio_erros.py` provoca erros de
+mentira pelo caminho real e confere agrupamento/mascaramento localmente;
+`--enviar` manda de verdade (exige `URL_RECEPTOR` preenchido);
+`--autoteste` valida só o caminho de ponta a ponta com uma Issue que abre e fecha na
+hora. `python tools/ver_erros.py` lê os chamados pelo terminal (precisa do `gh`
+autenticado).
+
+**Onde ficam os chamados**: repositório **privado** separado do app (ex.:
+`roger-eventos-erros`). O repositório do app continua público — a atualização
+automática depende disso — mas os relatórios carregam o link que o Rogério colou e
+trechos do registro, e não precisam ficar visíveis à internet inteira.
+
 ## Limitações conhecidas
 
 - **Playlists do Spotify acima de ~50 faixas**: a página pública devolve a lista em blocos e pode não trazer tudo. O app avisa no log quando o total cai num tamanho suspeito. Não validado com playlist grande de verdade — o Rogério trabalha com playlists menores que isso.
 - **Formato da página do Spotify pode mudar**: ver "Decisões técnicas" acima.
 - **yt-dlp precisa ser atualizado periodicamente** (`pip install -U yt-dlp`) quando o YouTube muda algo — o projeto costuma lançar correção rápido. Depois de atualizar, gerar o `.exe` de novo.
-- **Uso comercial**: baixar do YouTube para tocar em eventos pagos pode esbarrar em direitos autorais e nos Termos de Uso do YouTube. O app resolve o lado técnico; licenciamento musical para eventos (ECAD etc.) é responsabilidade do Rogério.
+- **Uso comercial**: baixar do YouTube para tocar em eventos pagos pode esbarrar em direitos autorais e nos Termos de Uso do YouTube. O app resolve o lado técnico; licenciamento musical para eventos (ECAD etc.) é responsabilidade do Rogério. Com vídeo isso fica mais visível: exibir clipe em telão é execução pública de obra audiovisual.
+- **Vídeo não tem escolha de resolução na janela**: é sempre até 1080p. Existe a chave `ALTURA_MAXIMA_VIDEO` em `core/youtube.py` para mudar isso no código; só virar botão se ele pedir.
+- **Cancelar durante a junção de imagem e som não interrompe**: essa etapa (ffmpeg) leva alguns segundos e não é cancelável no meio. O cancelamento vale durante o download, que é a parte longa.
+- **Vídeo do Spotify depende de existir clipe no YouTube**: se a faixa só tiver upload de áudio com capa estática, é isso que vem — marcado como "pode ser só o áudio, sem imagem" no final.
 
 ## Aprendizados / ajustes futuros
 
@@ -305,4 +391,5 @@ Resolve bem o caso real (repetir uma playlist não rebaixa nada). Uma detecção
 - 2026-08-07: atualização automática do app. Avaliado baixar o `.exe` inteiro (~142 MB) e descartado: pesado e, no Windows, um programa não consegue se sobrescrever enquanto está aberto — exigiria um processo auxiliar, mais peça para quebrar. Trocar só `core/` e `gui/` resolve a grande maioria dos casos com 26 KB.
 - 2026-08-07: avaliada uma trava que seguraria atualizações de sexta a domingo, para não trocar o código do app em dia de evento. **Descartada pelo Vitor:** o Rogério baixa as músicas com antecedência e deixa tudo programado antes da festa, então não há app rodando durante o evento para proteger. A trava só atrasaria correção. *Registrado aqui porque a ideia parece boa até se saber como ele trabalha de verdade.*
 - 2026-08-07: repositório **público** por decisão do Vitor. Privado exigiria uma chave dentro do `.exe`, que é extraível (ou seja, protege pouco) e **vence com o tempo** — quando vencesse, as atualizações parariam em silêncio. O app não guarda credencial nem dado do Rogério, então não havia o que proteger.
+- 2026-08-08: relatório automático de erros. Avaliado o app criar a Issue direto no GitHub e descartado pela mesma razão do ponto acima — chave extraível do `.exe` e que vence em silêncio. Escolhido um intermediário (Apps Script) que guarda a chave do lado do Vitor. Avaliado também mandar cada erro sem agrupar; descartado porque uma playlist com o YouTube bloqueado gera dezenas de falhas idênticas, e isso viraria ruído que ninguém lê — daí a impressão digital que agrupa repetições no mesmo chamado. **Pendente de ativação:** `URL_RECEPTOR` em `core/ocorrencias.py` está vazio até o Apps Script ser instalado (ver seção acima) e o repositório privado de erros ser criado; até lá o sistema fica pronto mas inerte (`enviar_pendentes` devolve 0 sem erro).
 - Ajustar a tolerância de duração em `core/matcher.py` (hoje ±5s) se aparecerem muitos falsos "incerto" ou muitas versões erradas na prática.

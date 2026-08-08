@@ -1,4 +1,4 @@
-"""Busca e download de áudio no YouTube via yt-dlp."""
+"""Busca e download de áudio e vídeo no YouTube via yt-dlp."""
 
 import sys
 from pathlib import Path
@@ -7,6 +7,20 @@ from typing import Callable
 import yt_dlp
 
 QUALIDADE_MP3 = "320"
+
+# Vídeo: 1080p em H.264 + AAC dentro de MP4. Não é "a melhor qualidade" de propósito —
+# o YouTube entrega VP9/AV1 dentro de WebM quando não se pede nada, e VirtualDJ, Serato
+# Video e Resolume não abrem esses formatos. Um arquivo que não toca no telão não serve.
+ALTURA_MAXIMA_VIDEO = 1080
+
+# Cascata: o ideal primeiro, e alternativas cada vez mais frouxas. O último ramo aceita
+# qualquer coisa — daí o remux para MP4 nos postprocessors, como rede de segurança.
+_MODELO_FORMATO_VIDEO = (
+    "bestvideo[vcodec^=avc1][height<=?{h}]+bestaudio[acodec^=mp4a]/"
+    "bestvideo[vcodec^=avc1][height<=?{h}]+bestaudio/"
+    "best[ext=mp4][height<=?{h}]/"
+    "bestvideo[height<=?{h}]+bestaudio/best"
+)
 
 # O YouTube bloqueia downloads não autenticados com "Sign in to confirm you're not a bot".
 # A saída recomendada pelo próprio yt-dlp é reusar os cookies de um navegador onde o
@@ -36,6 +50,10 @@ OPCOES_REDE = {
     "retries": 2,
     "extractor_retries": 1,
     "fragment_retries": 2,
+    # O YouTube entrega mídia em fragmentos (DASH). Baixar alguns em paralelo acelera
+    # bastante o vídeo, que é grande, e ajuda também no áudio. Mantido baixo de propósito:
+    # muitas conexões simultâneas do mesmo IP é justamente o que dispara o 429.
+    "concurrent_fragment_downloads": 4,
 }
 
 
@@ -143,6 +161,10 @@ def _executar_com_fallback(acao: Callable[[dict], object]) -> object:
 
 FFMPEG_LOCATION = _localizar_binario("ffmpeg.exe")
 
+# Usado pelo autoteste para conferir os codecs do MP4 gerado. Já vai empacotado no .exe
+# junto com o ffmpeg (build.spec), então não custa nada disponibilizar.
+FFPROBE_LOCATION = _localizar_binario("ffprobe.exe")
+
 # O yt-dlp precisa de um runtime JavaScript para resolver os desafios do YouTube.
 # Sem ele cai em caminhos alternativos mais lentos e frágeis. Empacotamos o Deno junto.
 DENO_LOCATION = _localizar_binario("deno.exe")
@@ -219,20 +241,76 @@ def listar_itens_playlist(url: str) -> list[dict]:
     return itens
 
 
-def baixar_audio(
+def _caminho_final(ydl, info: dict, extensao: str) -> Path:
+    """Descobre onde o arquivo realmente foi parar depois dos pós-processadores.
+
+    Não dá para deduzir do template: `prepare_filename` devolve o nome do fluxo baixado
+    (`.webm`, `.m4a`), e quem muda a extensão é o pós-processamento — extrair MP3 ou juntar
+    imagem e som num MP4. O yt-dlp anota o caminho definitivo em `requested_downloads`;
+    o `with_suffix` fica só como plano B para o caso de essa chave não vir.
+    """
+    baixados = info.get("requested_downloads") or []
+    if baixados and baixados[0].get("filepath"):
+        return Path(baixados[0]["filepath"])
+    return Path(ydl.prepare_filename(info)).with_suffix(extensao)
+
+
+def _baixar(
     url: str,
     pasta_destino: Path,
-    nome_arquivo: str | None = None,
+    nome_arquivo: str | None,
+    extensao: str,
+    opcoes_da_midia: dict,
     progresso_callback: Callable[[dict], None] | None = None,
+    pos_processamento_callback: Callable[[dict], None] | None = None,
 ) -> Path:
-    """Baixa o áudio de um vídeo do YouTube como MP3 320kbps na pasta destino."""
+    """Base comum de `baixar_audio` e `baixar_video`: só o formato e o destino mudam."""
     pasta_destino.mkdir(parents=True, exist_ok=True)
     template_saida = str(pasta_destino / (nome_arquivo or "%(title)s")) + ".%(ext)s"
 
     def acao(extra: dict):
         opcoes = {
-            "format": "bestaudio/best",
             "outtmpl": template_saida,
+            "quiet": True,
+            # `quiet` sozinho não cala a barra de progresso do yt-dlp: ela continua indo
+            # para o console e deixa a saída do autoteste ilegível. Quem mostra progresso
+            # aqui é a janela, via progress_hooks.
+            "noprogress": True,
+            "no_warnings": True,
+            "noplaylist": True,
+            **opcoes_da_midia,
+            **OPCOES_REDE,
+            **extra,
+        }
+        if FFMPEG_LOCATION:
+            opcoes["ffmpeg_location"] = FFMPEG_LOCATION
+        if progresso_callback:
+            opcoes["progress_hooks"] = [progresso_callback]
+        if pos_processamento_callback:
+            opcoes["postprocessor_hooks"] = [pos_processamento_callback]
+
+        with yt_dlp.YoutubeDL(opcoes) as ydl:
+            info = ydl.extract_info(url, download=True)
+            return _caminho_final(ydl, info, extensao)
+
+    return _executar_com_fallback(acao)
+
+
+def baixar_audio(
+    url: str,
+    pasta_destino: Path,
+    nome_arquivo: str | None = None,
+    progresso_callback: Callable[[dict], None] | None = None,
+    pos_processamento_callback: Callable[[dict], None] | None = None,
+) -> Path:
+    """Baixa o áudio de um vídeo do YouTube como MP3 320kbps na pasta destino."""
+    return _baixar(
+        url,
+        pasta_destino,
+        nome_arquivo,
+        ".mp3",
+        {
+            "format": "bestaudio/best",
             "postprocessors": [
                 {
                     "key": "FFmpegExtractAudio",
@@ -246,19 +324,67 @@ def baixar_audio(
                 {"key": "EmbedThumbnail", "already_have_thumbnail": False},
             ],
             "writethumbnail": True,
+        },
+        progresso_callback,
+        pos_processamento_callback,
+    )
+
+
+def obter_titulo(url: str) -> str | None:
+    """Descobre o título de um vídeo sem baixá-lo. `None` se não der.
+
+    Custa ~2s de rede, e é o que permite saber o nome do arquivo ANTES do download:
+    sem isso não dá para checar se ele já está na pasta nem para saber o que apagar
+    quando o usuário cancela no meio. Vale a pena para vídeo, que pesa centenas de MB;
+    para música o download inteiro leva ~10s e a consulta não se pagaria.
+    """
+    def acao(extra: dict):
+        opcoes = {
             "quiet": True,
             "no_warnings": True,
+            "noprogress": True,
+            "skip_download": True,
             "noplaylist": True,
             **OPCOES_REDE,
             **extra,
         }
-        if FFMPEG_LOCATION:
-            opcoes["ffmpeg_location"] = FFMPEG_LOCATION
-        if progresso_callback:
-            opcoes["progress_hooks"] = [progresso_callback]
-
         with yt_dlp.YoutubeDL(opcoes) as ydl:
-            info = ydl.extract_info(url, download=True)
-            return Path(ydl.prepare_filename(info)).with_suffix(".mp3")
+            return ydl.extract_info(url, download=False)
 
-    return _executar_com_fallback(acao)
+    try:
+        return (_executar_com_fallback(acao) or {}).get("title")
+    except Exception:  # noqa: BLE001 - é um extra; sem título o download segue normal
+        return None
+
+
+def baixar_video(
+    url: str,
+    pasta_destino: Path,
+    nome_arquivo: str | None = None,
+    progresso_callback: Callable[[dict], None] | None = None,
+    pos_processamento_callback: Callable[[dict], None] | None = None,
+    altura_maxima: int = ALTURA_MAXIMA_VIDEO,
+) -> Path:
+    """Baixa o vídeo completo como MP4 (H.264 + AAC), pronto para tocar no telão."""
+    return _baixar(
+        url,
+        pasta_destino,
+        nome_arquivo,
+        ".mp4",
+        {
+            "format": _MODELO_FORMATO_VIDEO.format(h=altura_maxima),
+            "merge_output_format": "mp4",
+            "postprocessors": [
+                # Se o seletor tiver caído no último ramo (WebM/VP9), converte o container
+                # para MP4. Sem isto um arquivo que o software de DJ não abre passaria
+                # como sucesso e só falharia na hora do evento.
+                {"key": "FFmpegVideoRemuxer", "preferedformat": "mp4"},
+                {"key": "FFmpegMetadata", "add_metadata": True},
+                # Miniatura embutida: é o que faz o Explorer mostrar a capa do vídeo.
+                {"key": "EmbedThumbnail", "already_have_thumbnail": False},
+            ],
+            "writethumbnail": True,
+        },
+        progresso_callback,
+        pos_processamento_callback,
+    )
