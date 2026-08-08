@@ -7,7 +7,9 @@ App desktop para o Rogério baixar músicas (individuais ou playlists) do YouTub
 ## Onde está
 
 - Código: `app/` (`main.py`, `gui/`, `core/`)
+- Repositório: **github.com/BigVirto/roger-eventos** (público) — também é de onde o app baixa suas próprias atualizações
 - Downloads: `downloads/<nome da playlist/evento>/` (playlists e álbuns) ou direto em `downloads/` (faixa avulsa)
+- Na máquina do Rogério: programa em `%LOCALAPPDATA%\Programs\RogerEventos`, dados (config, log, atualizações) em `%LOCALAPPDATA%\RogerEventos`, músicas em `Músicas\Roger Eventos`
 
 ## Como funciona (fluxo de um campo só)
 
@@ -64,12 +66,52 @@ Funciona porque `core/` e `gui/` são Python puro (~26 KB zipados). O `.exe` con
 mesmo; só os arquivos de texto são trocados. `core/atualizador_app.py` faz o trabalho,
 usando o mesmo truque de `core/atualizador.py`, que já fazia isso com o yt-dlp.
 
+**Onde fica:** repositório **público** `github.com/BigVirto/roger-eventos`, definido em
+`REPOSITORIO` (`core/atualizador_app.py`). O app consulta o release mais recente de lá.
+Apagar esse repositório, torná-lo privado ou renomeá-lo **para as atualizações em
+silêncio** — o app segue funcionando e ninguém é avisado.
+
 **Como publicar uma versão:**
 
 ```
 1. subir o número em app/core/versao.py         (sem isso o app ignora o pacote)
 2. python tools/publicar_atualizacao.py --publicar
 ```
+
+### O que a máquina precisa ter para publicar
+
+O `git` sozinho não basta: release é um recurso do GitHub, não do git.
+
+```
+winget install GitHub.cli
+gh auth login          → GitHub.com / HTTPS / "Authenticate Git?" NÃO / navegador
+```
+
+Responder **não** a "Authenticate Git with your GitHub credentials?" é proposital: o
+envio por git já funciona e essa opção mexeria na configuração de credencial.
+
+> **Cuidado com a conta errada — já aconteceu.** Esta máquina tem duas contas do GitHub
+> guardadas no Windows: `VitorV4` (antiga) e `BigVirto` (dona do repositório). O primeiro
+> `git push` foi tentado com a antiga e voltou `Permission denied ... 403`, sem deixar
+> claro que o problema era a conta. Resolvido fixando a conta **neste repositório**, sem
+> tocar na outra:
+>
+> ```
+> git config credential.https://github.com.username BigVirto
+> git config credential.useHttpPath true
+> ```
+>
+> Ao clonar em outra máquina, repetir isso se houver mais de uma conta salva. No
+> `gh auth login`, conferir também que o navegador está logado como `BigVirto`.
+
+### A primeira entrega ainda é manual
+
+Uma máquina só entra no caminho automático depois de ter a **1.2.0 ou mais nova**
+instalada — é o instalador que traz a capacidade de se atualizar, e o app não tem como
+aprendê-la sozinho. Quem ficar numa versão anterior nunca recebe nada e não avisa.
+
+Vale instalar também na máquina do Vitor: assim toda atualização passa por ele antes de
+chegar no Rogério, de graça.
 
 O app do Rogério verifica a cada 6 horas. **A troca vale na abertura seguinte** — quem
 estiver com o app aberto na hora só vê a mudança quando fechar e abrir de novo.
